@@ -98,3 +98,5 @@ td .clip, td.clip { max-width: 260px; overflow: hidden; text-overflow: ellipsis;
   main.with-panel { grid-template-columns: 1fr; grid-template-rows: minmax(300px, 1fr) minmax(0, 1fr); }
   .fc .fc-toolbar { flex-wrap: wrap; gap: 6px; }
 }
+
+.version { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }

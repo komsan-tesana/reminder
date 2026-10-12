@@ -52,6 +52,9 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <h1>Transport Calendar</h1>
+        <span className="version" title={`build ${__BUILD_DATE__}`}>
+          v{__APP_VERSION__}
+        </span>
         <span className="muted">{shipments.length.toLocaleString()} รายการ</span>
         <div className="spacer" />
         <label>
