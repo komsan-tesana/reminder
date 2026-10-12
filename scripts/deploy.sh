@@ -33,9 +33,10 @@ fi
 echo "→ ดึงข้อมูลล่าสุดจาก $REMOTE"
 git fetch "$REMOTE"
 
+# local may be ahead of remote (we push it below) but must not be behind or diverged
 if git rev-parse --verify -q "$REMOTE/$SOURCE_BRANCH" >/dev/null &&
-   [ "$(git rev-parse HEAD)" != "$(git rev-parse "$REMOTE/$SOURCE_BRANCH")" ]; then
-  echo "✗ $SOURCE_BRANCH ไม่ตรงกับ $REMOTE/$SOURCE_BRANCH (ยังไม่ push หรือต้อง pull) กรุณา sync ก่อน" >&2
+   ! git merge-base --is-ancestor "$REMOTE/$SOURCE_BRANCH" HEAD; then
+  echo "✗ $SOURCE_BRANCH ตามหลังหรือแยกจาก $REMOTE/$SOURCE_BRANCH กรุณา pull/rebase ก่อน" >&2
   exit 1
 fi
 
