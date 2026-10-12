@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie'
 import type { Era, GroupBy, Mapping, NotifySettings, Reminder, Shipment } from '../types'
+import type { Tone } from './group'
 
 // 4k+ rows exceed the ~5MB localStorage quota, so data lives in IndexedDB
 // (still browser-local, no backend). localStorage holds only small settings.
@@ -14,11 +15,22 @@ class AppDB extends Dexie {
 }
 export const db = new AppDB()
 
-export type Settings = { era: Era; groupBy: GroupBy; notify: NotifySettings }
+export type ToneSetting = { show: boolean; color: string }
+/** statusColors is the master switch; each tone can also be hidden or recoloured. */
+export type DisplaySettings = { statusColors: boolean; tones: Record<Tone, ToneSetting> }
+
+export const DEFAULT_TONES: Record<Tone, ToneSetting> = {
+  assigned: { show: true, color: '#16a34a' },
+  pending: { show: true, color: '#ea580c' },
+  unassigned: { show: true, color: '#8b95a3' },
+}
+
+export type Settings = { era: Era; groupBy: GroupBy; notify: NotifySettings; display: DisplaySettings }
 export const DEFAULT_SETTINGS: Settings = {
   era: 'BE',
   groupBy: 'customer',
-  notify: { enabled: false, time: '08:00', today: true, tomorrow: true },
+  notify: { enabled: false, time: '08:00', today: true, daysAhead: 1, sound: true },
+  display: { statusColors: true, tones: DEFAULT_TONES },
 }
 const SETTINGS_KEY = 'reminder.settings.v1'
 const MAPPING_KEY = 'reminder.mapping.v1'
@@ -42,7 +54,18 @@ function write(key: string, value: unknown) {
 
 export function loadSettings(): Settings {
   const s = read<Settings>(SETTINGS_KEY, DEFAULT_SETTINGS)
-  return { ...s, notify: { ...DEFAULT_SETTINGS.notify, ...s.notify } }
+  const tones = Object.fromEntries(
+    (Object.keys(DEFAULT_TONES) as Tone[]).map((t) => [t, { ...DEFAULT_TONES[t], ...s.display?.tones?.[t] }]),
+  ) as Record<Tone, ToneSetting>
+  // older versions stored `tomorrow: boolean` instead of `daysAhead`
+  const { tomorrow, ...savedNotify } = (s.notify ?? {}) as Partial<NotifySettings> & { tomorrow?: boolean }
+  const notify = { ...DEFAULT_SETTINGS.notify, ...savedNotify }
+  if (savedNotify.daysAhead === undefined && tomorrow === false) notify.daysAhead = 0
+  return {
+    ...s,
+    notify,
+    display: { statusColors: s.display?.statusColors ?? true, tones },
+  }
 }
 export const saveSettings = (s: Settings) => write(SETTINGS_KEY, s)
 

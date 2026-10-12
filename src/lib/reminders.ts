@@ -26,22 +26,34 @@ export function daySummary(shipments: Shipment[], iso: string): DaySummary {
   return { total, unassigned, pending }
 }
 
-export type Digest = { title: string; body: string; today: DaySummary; tomorrow: DaySummary }
+export type DigestDay = DaySummary & { date: string; offset: number; label: string }
+export type Digest = { title: string; body: string; days: DigestDay[] }
 
-/** What to tell the user about today's / tomorrow's shipments; null when there is nothing. */
-export function dailyDigest(shipments: Shipment[], now: Date, opts: Pick<NotifySettings, 'today' | 'tomorrow'>): Digest | null {
+const dayLabel = (offset: number, iso: string) => {
+  if (offset === 0) return 'วันนี้'
+  if (offset === 1) return 'พรุ่งนี้'
+  const [, m, d] = iso.split('-')
+  return `อีก ${offset} วัน (${+d}/${+m})`
+}
+
+export const MAX_DAYS_AHEAD = 14
+
+/**
+ * Day-by-day summary of what is coming up: today (optional) plus the next `daysAhead` days.
+ * Days with nothing scheduled are left out; null when there is nothing at all.
+ */
+export function dailyDigest(shipments: Shipment[], now: Date, opts: Pick<NotifySettings, 'today' | 'daysAhead'>): Digest | null {
   const todayIso = localDate(now)
-  const today = daySummary(shipments, todayIso)
-  const tomorrow = daySummary(shipments, addDays(todayIso, 1))
-  const parts: string[] = []
-  if (opts.today && today.total > 0) {
-    parts.push(`วันนี้ ${today.total} รายการ${today.unassigned ? ` (ยังไม่จัดรถ ${today.unassigned})` : ''}`)
+  const ahead = Math.min(Math.max(Math.floor(opts.daysAhead) || 0, 0), MAX_DAYS_AHEAD)
+  const days: DigestDay[] = []
+  for (let offset = opts.today ? 0 : 1; offset <= ahead; offset++) {
+    const date = addDays(todayIso, offset)
+    const sum = daySummary(shipments, date)
+    if (sum.total > 0) days.push({ ...sum, date, offset, label: dayLabel(offset, date) })
   }
-  if (opts.tomorrow && tomorrow.total > 0) {
-    parts.push(`พรุ่งนี้ ${tomorrow.total} รายการ${tomorrow.unassigned ? ` (ยังไม่จัดรถ ${tomorrow.unassigned})` : ''}`)
-  }
-  if (!parts.length) return null
-  return { title: 'แผนขนส่ง', body: parts.join(' · '), today, tomorrow }
+  if (!days.length) return null
+  const body = days.map((d) => `${d.label} ${d.total} รายการ${d.unassigned ? ` (ยังไม่จัดรถ ${d.unassigned})` : ''}`).join('\n')
+  return { title: 'แผนขนส่ง', body, days }
 }
 
 /** Reminders whose time has come and that have not fired yet. */

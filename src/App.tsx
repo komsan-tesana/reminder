@@ -5,9 +5,11 @@ import FilterBar from './components/FilterBar'
 import Toasts, { type Toast } from './components/Toasts'
 import type { ReminderDraft } from './components/ReminderModal'
 import { db, editShipments, loadSettings, restoreBackup, saveSettings, type Settings } from './lib/db'
+import { availableFields, effectiveGroupBy, groupOptions } from './lib/available'
 import { applyFilters, NO_FILTERS } from './lib/filters'
-import type { Group } from './lib/group'
-import { dailyDigest, dueReminders, localDate } from './lib/reminders'
+import type { Group, Tone } from './lib/group'
+import { dailyDigest, dueReminders } from './lib/reminders'
+import { playChime } from './lib/sound'
 import { systemNotify, useReminderEngine } from './lib/useReminderEngine'
 import type { Filters, NotifySettings, Reminder, Shipment } from './types'
 
@@ -16,13 +18,16 @@ const ImportWizard = lazy(() => import('./components/ImportWizard'))
 const DataModal = lazy(() => import('./components/DataModal'))
 const ReminderModal = lazy(() => import('./components/ReminderModal'))
 const EditModal = lazy(() => import('./components/EditModal'))
+const SettingsModal = lazy(() => import('./components/SettingsModal'))
 
 type Selection = { date: string; key: string | null }
-type Dialog = 'import' | 'data' | 'reminders' | null
+type Dialog = 'import' | 'data' | 'reminders' | 'settings' | null
 
 const latestDate = (items: Shipment[]) => items.reduce<string | null>((m, s) => (!m || s.date > m ? s.date : m), null)
 
 let toastSeq = 0
+
+const GROUP_LABEL = { customer: 'ลูกค้า', so: 'Sales Order', truck: 'รถ' } as const
 
 export default function App() {
   const [shipments, setShipments] = useState<Shipment[]>([])
@@ -58,10 +63,39 @@ export default function App() {
 
   useReminderEngine({ ready: loaded, shipments, reminders, notify: settings.notify, push, markFired })
 
+  // columns with no data anywhere (not mapped, or empty in every row) are hidden
+  const available = useMemo(() => availableFields(shipments), [shipments])
+  const groupBy = effectiveGroupBy(settings.groupBy, available)
+  const groupChoices = groupOptions(available)
+
+  const { display } = settings
+  // a tone is only meaningful when the data can produce it (e.g. no driver/truck column -> no "assigned")
+  const hasAssign = available.driver || available.truck
+  const toneVisible = useMemo(
+    () => ({
+      assigned: display.statusColors && display.tones.assigned.show && hasAssign,
+      pending: display.statusColors && display.tones.pending.show && available.status,
+      unassigned: display.statusColors && display.tones.unassigned.show && hasAssign,
+    }),
+    [display, hasAssign, available.status],
+  )
+  const toneStyle = {
+    '--assigned': display.tones.assigned.color,
+    '--pending': display.tones.pending.color,
+    '--unassigned': display.tones.unassigned.color,
+  } as React.CSSProperties
+  const legend = (
+    [
+      { tone: 'assigned', label: 'จัดรถแล้ว' },
+      { tone: 'pending', label: 'ขึ้นค้าง' },
+      { tone: 'unassigned', label: 'ยังไม่จัดรถ' },
+    ] as { tone: Tone; label: string }[]
+  ).filter((l) => toneVisible[l.tone])
+
   const visible = useMemo(() => applyFilters(shipments, filters), [shipments, filters])
   const digest = useMemo(
-    () => (loaded ? dailyDigest(shipments, new Date(), { today: true, tomorrow: true }) : null),
-    [loaded, shipments],
+    () => (loaded ? dailyDigest(shipments, new Date(), settings.notify) : null),
+    [loaded, shipments, settings.notify],
   )
   const dueCount = dueReminders(reminders, new Date()).length
 
@@ -129,6 +163,7 @@ export default function App() {
     const m = d ?? { title: 'ทดสอบการแจ้งเตือน', body: 'ไม่มีงานวันนี้/พรุ่งนี้ นี่คือข้อความทดสอบ' }
     systemNotify(m)
     push(m)
+    if (settings.notify.sound) void playChime()
   }
 
   function remindFor(rows: Shipment[], date: string) {
@@ -139,11 +174,10 @@ export default function App() {
     setDialog('reminders')
   }
 
-  const todayIso = localDate(new Date())
   const pickGroup = (g: Group) => setSelection({ date: g.date, key: g.key })
 
   return (
-    <div className="app">
+    <div className="app" style={toneStyle}>
       <header className="topbar">
         <h1>Transport Calendar</h1>
         <span className="version" title={`build ${__BUILD_DATE__}`}>
@@ -153,10 +187,12 @@ export default function App() {
         <div className="spacer" />
         <label>
           จัดกลุ่ม
-          <select value={settings.groupBy} onChange={(e) => update({ groupBy: e.target.value as Settings['groupBy'] })}>
-            <option value="customer">ลูกค้า</option>
-            <option value="so">Sales Order</option>
-            <option value="truck">รถ</option>
+          <select value={groupBy} onChange={(e) => update({ groupBy: e.target.value as Settings['groupBy'] })}>
+            {groupChoices.map((g) => (
+              <option key={g} value={g}>
+                {GROUP_LABEL[g]}
+              </option>
+            ))}
           </select>
         </label>
         <label>
@@ -170,19 +206,27 @@ export default function App() {
           นำเข้า Excel
         </button>
         <button onClick={() => setDialog('data')}>ส่งออก / สำรอง</button>
+        <button onClick={() => setDialog('settings')} aria-label="ตั้งค่าการแสดงผล" title="ตั้งค่าการแสดงผล">
+          ⚙
+        </button>
         <button onClick={() => { setDraft(null); setDialog('reminders') }}>
           🔔 เตือน{dueCount > 0 && <span className="badge">{dueCount}</span>}
         </button>
       </header>
 
-      {shipments.length > 0 && <FilterBar shipments={shipments} filters={filters} shown={visible.length} onChange={setFilters} />}
+      {shipments.length > 0 && <FilterBar shipments={shipments} available={available} filters={filters} shown={visible.length} onChange={setFilters} />}
 
       {digest && !bannerOff && (
         <div className="banner" role="status">
-          <span>
-            📅 {digest.body}
+          <span className="banner-days">
+            📅
+            {digest.days.map((d) => (
+              <button key={d.date} onClick={() => { setFocusDate(d.date); setSelection({ date: d.date, key: null }) }}>
+                {d.label} <b>{d.total}</b>
+                {d.unassigned > 0 && <span className="muted"> · ยังไม่จัดรถ {d.unassigned}</span>}
+              </button>
+            ))}
           </span>
-          {digest.today.total > 0 && <button onClick={() => { setFocusDate(todayIso); setSelection({ date: todayIso, key: null }) }}>ดูวันนี้</button>}
           <button className="icon" onClick={() => setBannerOff(true)} aria-label="ปิด">
             ✕
           </button>
@@ -201,14 +245,21 @@ export default function App() {
           <CalendarView
             shipments={visible}
             era={settings.era}
-            groupBy={settings.groupBy}
+            groupBy={groupBy}
+            toneVisible={toneVisible}
             focusDate={focusDate}
             onSelectGroup={pickGroup}
             onSelectDate={(date) => setSelection({ date, key: null })}
           />
-          <div className="legend">
-            <i className="dot tone-assigned" /> จัดรถแล้ว <i className="dot tone-pending" /> ขึ้นค้าง <i className="dot tone-unassigned" /> ยังไม่จัดรถ
-          </div>
+          {legend.length > 0 && (
+            <div className="legend">
+              {legend.map((l) => (
+                <span key={l.tone}>
+                  <i className={`dot tone-${l.tone}`} /> {l.label}
+                </span>
+              ))}
+            </div>
+          )}
         </section>
         {selection && (
           <DetailPanel
@@ -217,7 +268,8 @@ export default function App() {
             groupKeyFilter={selection.key}
             shipments={visible}
             era={settings.era}
-            groupBy={settings.groupBy}
+            groupBy={groupBy}
+            available={available}
             onShowWholeDay={() => setSelection({ date: selection.date, key: null })}
             onEdit={setEditing}
             onRemind={remindFor}
@@ -235,7 +287,7 @@ export default function App() {
             all={shipments}
             filtered={visible}
             reminders={reminders}
-            groupBy={settings.groupBy}
+            groupBy={groupBy}
             onRestore={restore}
             onClear={clearAll}
             onClose={() => setDialog(null)}
@@ -255,6 +307,7 @@ export default function App() {
             onClose={() => setDialog(null)}
           />
         )}
+        {dialog === 'settings' && <SettingsModal display={display} onChange={(d) => update({ display: d })} onClose={() => setDialog(null)} />}
         {editing && <EditModal rows={editing} all={shipments} era={settings.era} onSave={saveEdit} onClose={() => setEditing(null)} />}
       </Suspense>
     </div>

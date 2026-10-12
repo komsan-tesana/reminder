@@ -77,4 +77,5 @@ export type Reminder = {
   firedAt?: number
 }
 
-export type NotifySettings = { enabled: boolean; time: string; today: boolean; tomorrow: boolean }
+/** daysAhead: how many days after today the daily digest also lists (0 = today only) */
+export type NotifySettings = { enabled: boolean; time: string; today: boolean; daysAhead: number; sound: boolean }
