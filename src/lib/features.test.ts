@@ -4,6 +4,7 @@ import { buildGroups } from './group'
 import { parseBackup, toBackup, toCSV, toICS, toRows, foldLine, fmtExportDate } from './exporters'
 import { addDays, dailyDigest, dueReminders, localDateTime, shouldFireDigest } from './reminders'
 import { autoMap, buildShipments } from './mapping'
+import { availableFields, effectiveGroupBy, groupOptions } from './available'
 import type { Shipment } from '../types'
 
 const make = (over: Partial<Shipment> = {}): Shipment => ({
@@ -80,10 +81,19 @@ describe('reminders', () => {
   const rows = [make({ id: '1', date: '2026-10-12' }), make({ id: '2', date: '2026-10-12', driver: 'x' }), make({ id: '3', date: '2026-10-13' })]
   it('adds days across month ends', () => expect(addDays('2026-10-31', 1)).toBe('2026-11-01'))
   it('summarises today and tomorrow', () => {
-    const d = dailyDigest(rows, now, { today: true, tomorrow: true })
-    expect(d?.body).toBe('วันนี้ 2 รายการ (ยังไม่จัดรถ 1) · พรุ่งนี้ 1 รายการ (ยังไม่จัดรถ 1)')
-    expect(dailyDigest(rows, now, { today: false, tomorrow: false })).toBeNull()
-    expect(dailyDigest([], now, { today: true, tomorrow: true })).toBeNull()
+    const d = dailyDigest(rows, now, { today: true, daysAhead: 1 })
+    expect(d?.body).toBe('วันนี้ 2 รายการ (ยังไม่จัดรถ 1)\nพรุ่งนี้ 1 รายการ (ยังไม่จัดรถ 1)')
+    expect(dailyDigest(rows, now, { today: false, daysAhead: 0 })).toBeNull()
+    expect(dailyDigest([], now, { today: true, daysAhead: 3 })).toBeNull()
+  })
+  it('lists each upcoming day separately and skips empty days', () => {
+    const more = [...rows, make({ id: '4', date: '2026-10-15' }), make({ id: '5', date: '2026-10-30' })]
+    const d = dailyDigest(more, now, { today: true, daysAhead: 3 })
+    expect(d?.days.map((x) => [x.offset, x.total])).toEqual([[0, 2], [1, 1], [3, 1]])
+    expect(d?.days[2].label).toBe('อีก 3 วัน (15/10)')
+    // beyond the window: not listed; today can be switched off
+    expect(dailyDigest(more, now, { today: false, daysAhead: 3 })?.days.map((x) => x.offset)).toEqual([1, 3])
+    expect(dailyDigest(more, now, { today: true, daysAhead: 99 })?.days.some((x) => x.offset === 18)).toBe(false)
   })
   it('finds due reminders only once', () => {
     const r = (id: string, at: string, extra = {}) => ({ id, title: id, at, done: false, ...extra })
@@ -92,10 +102,37 @@ describe('reminders', () => {
     expect(localDateTime(now)).toBe('2026-10-12T09:00')
   })
   it('fires the digest once per day after the set time', () => {
-    const n = { enabled: true, time: '08:00', today: true, tomorrow: true }
+    const n = { enabled: true, time: '08:00', today: true, daysAhead: 1, sound: true }
     expect(shouldFireDigest(n, now, null)).toBe(true)
     expect(shouldFireDigest(n, now, '2026-10-12')).toBe(false)
     expect(shouldFireDigest({ ...n, time: '10:00' }, now, null)).toBe(false)
     expect(shouldFireDigest({ ...n, enabled: false }, now, null)).toBe(false)
+  })
+})
+
+describe('available columns', () => {
+  const base = (over: Partial<Shipment> = {}) => make({ customerName: '', customerCode: '', description: '', itemNo: '', qty: 0, unit: '', site: '', ...over })
+  it('hides columns that are empty in every row', () => {
+    const av = availableFields([base({ so: 'S1', site: 'BP1' }), base({ so: 'S2' })])
+    expect(av).toMatchObject({ so: true, site: true, driver: false, truck: false, status: false, customer: false, qty: false })
+  })
+  it('shows a column as soon as any row has data (e.g. after assigning a driver)', () => {
+    const rows = [base({ so: 'S1' }), base({ so: 'S2', driver: 'x' })]
+    expect(availableFields(rows).driver).toBe(true)
+    expect(availableFields([rows[0]]).driver).toBe(false)
+  })
+  it('falls back to a group option that has data', () => {
+    const av = availableFields([base({ so: 'S1', truckNo: 'เบอร์8' })])
+    expect(groupOptions(av)).toEqual(['so', 'truck'])
+    expect(effectiveGroupBy('customer', av)).toBe('so')
+    expect(effectiveGroupBy('truck', av)).toBe('truck')
+    expect(groupOptions(availableFields([]))).toEqual(['customer'])
+  })
+})
+
+describe('sound', () => {
+  it('is a safe no-op where Web Audio does not exist', async () => {
+    const { playChime } = await import('./sound')
+    expect(await playChime()).toBe(false)
   })
 })

@@ -1,16 +1,30 @@
 import { useMemo } from 'react'
+import SearchSelect, { type Option } from './SearchSelect'
+import type { Available } from '../lib/available'
 import { customerOf, EMPTY, hasFilters, NO_FILTERS, uniqueValues } from '../lib/filters'
 import type { Filters, Shipment } from '../types'
 
-type Props = { shipments: Shipment[]; filters: Filters; shown: number; onChange: (f: Filters) => void }
+type Props = {
+  shipments: Shipment[]
+  available: Available
+  filters: Filters
+  shown: number
+  onChange: (f: Filters) => void
+}
 
-export default function FilterBar({ shipments, filters, shown, onChange }: Props) {
+const build = (values: string[], emptyLabel?: string): Option[] => [
+  { value: '', label: 'ทั้งหมด' },
+  ...(emptyLabel ? [{ value: EMPTY, label: emptyLabel }] : []),
+  ...values.map((v) => ({ value: v, label: v })),
+]
+
+export default function FilterBar({ shipments, available, filters, shown, onChange }: Props) {
   const opts = useMemo(
     () => ({
-      site: uniqueValues(shipments, (s) => s.site),
-      status: uniqueValues(shipments, (s) => s.status),
-      driver: uniqueValues(shipments, (s) => s.driver),
-      customer: uniqueValues(shipments, customerOf),
+      site: build(uniqueValues(shipments, (s) => s.site)),
+      status: build(uniqueValues(shipments, (s) => s.status), '(ยังไม่มีสถานะ)'),
+      driver: build(uniqueValues(shipments, (s) => s.driver), '(ยังไม่จัดคนขับ)'),
+      customer: build(uniqueValues(shipments, customerOf)),
     }),
     [shipments],
   )
@@ -25,32 +39,10 @@ export default function FilterBar({ shipments, filters, shown, onChange }: Props
         value={filters.q}
         onChange={(e) => set({ q: e.target.value })}
       />
-      <select aria-label="กรองตาม Site" value={filters.site} onChange={(e) => set({ site: e.target.value })}>
-        <option value="">Site: ทั้งหมด</option>
-        {opts.site.map((v) => (
-          <option key={v}>{v}</option>
-        ))}
-      </select>
-      <select aria-label="กรองตามสถานะ" value={filters.status} onChange={(e) => set({ status: e.target.value })}>
-        <option value="">สถานะ: ทั้งหมด</option>
-        <option value={EMPTY}>(ยังไม่มีสถานะ)</option>
-        {opts.status.map((v) => (
-          <option key={v}>{v}</option>
-        ))}
-      </select>
-      <select aria-label="กรองตามคนขับ" value={filters.driver} onChange={(e) => set({ driver: e.target.value })}>
-        <option value="">คนขับ: ทั้งหมด</option>
-        <option value={EMPTY}>(ยังไม่จัดคนขับ)</option>
-        {opts.driver.map((v) => (
-          <option key={v}>{v}</option>
-        ))}
-      </select>
-      <select aria-label="กรองตามลูกค้า" value={filters.customer} onChange={(e) => set({ customer: e.target.value })}>
-        <option value="">ลูกค้า: ทั้งหมด</option>
-        {opts.customer.map((v) => (
-          <option key={v}>{v}</option>
-        ))}
-      </select>
+      {available.site && <SearchSelect title="Site" value={filters.site} options={opts.site} onChange={(site) => set({ site })} />}
+      {available.status && <SearchSelect title="สถานะ" value={filters.status} options={opts.status} onChange={(status) => set({ status })} />}
+      {available.driver && <SearchSelect title="คนขับ" value={filters.driver} options={opts.driver} onChange={(driver) => set({ driver })} />}
+      {available.customer && <SearchSelect title="ลูกค้า" value={filters.customer} options={opts.customer} onChange={(customer) => set({ customer })} />}
       {hasFilters(filters) && (
         <>
           <span className="muted small">{shown.toLocaleString()} รายการ</span>

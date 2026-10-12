@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { lastDigestDate, setLastDigestDate } from './db'
+import { playChime } from './sound'
 import { dailyDigest, dueReminders, localDate, shouldFireDigest } from './reminders'
 import type { NotifySettings, Reminder, Shipment } from '../types'
 
@@ -33,6 +34,7 @@ export function useReminderEngine(args: Args) {
     const tick = () => {
       const { shipments, reminders, notify, push, markFired } = latest.current
       const now = new Date()
+      let alerted = false
 
       if (shouldFireDigest(notify, now, lastDigestDate())) {
         setLastDigestDate(localDate(now))
@@ -40,6 +42,7 @@ export function useReminderEngine(args: Args) {
         if (d) {
           systemNotify(d)
           push(d)
+          alerted = true
         }
       }
 
@@ -51,7 +54,11 @@ export function useReminderEngine(args: Args) {
           systemNotify(m)
           push(m)
         }
+        alerted = true
       }
+
+      // one chime per tick, even if a digest and several reminders fire together
+      if (alerted && notify.sound) void playChime()
     }
     tick()
     const id = setInterval(tick, 30_000)

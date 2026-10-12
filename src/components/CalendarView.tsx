@@ -5,7 +5,7 @@ import listPlugin from '@fullcalendar/list'
 import interactionPlugin from '@fullcalendar/interaction'
 import thLocale from '@fullcalendar/core/locales/th'
 import dayjs from 'dayjs'
-import { buildGroups, type Group } from '../lib/group'
+import { buildGroups, type Group, type Tone } from '../lib/group'
 import { fmtDate } from '../lib/format'
 import type { Era, GroupBy, Shipment } from '../types'
 
@@ -13,6 +13,8 @@ type Props = {
   shipments: Shipment[]
   era: Era
   groupBy: GroupBy
+  /** tones whose colour is shown; hidden ones render as a neutral chip */
+  toneVisible: Record<Tone, boolean>
   focusDate: string | null
   onSelectGroup: (g: Group) => void
   onSelectDate: (date: string) => void
@@ -20,7 +22,7 @@ type Props = {
 
 type TitleArg = { date: { year: number; month: number; day: number } }
 
-export default function CalendarView({ shipments, era, groupBy, focusDate, onSelectGroup, onSelectDate }: Props) {
+export default function CalendarView({ shipments, era, groupBy, toneVisible, focusDate, onSelectGroup, onSelectDate }: Props) {
   const ref = useRef<FullCalendar>(null)
   const groups = useMemo(() => buildGroups(shipments, groupBy), [shipments, groupBy])
   const byId = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups])
@@ -31,9 +33,9 @@ export default function CalendarView({ shipments, era, groupBy, focusDate, onSel
         title: `${g.label} (${g.rows.length})`,
         start: g.date,
         allDay: true,
-        classNames: [`tone-${g.tone}`],
+        classNames: [`tone-${toneVisible[g.tone] ? g.tone : 'none'}`],
       })),
-    [groups],
+    [groups, toneVisible],
   )
 
   useEffect(() => {

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { fmtDate, fmtQty } from '../lib/format'
 import { groupKey } from '../lib/group'
+import type { Available } from '../lib/available'
 import type { Era, GroupBy, Shipment } from '../types'
 
 type Props = {
@@ -10,13 +11,14 @@ type Props = {
   shipments: Shipment[]
   era: Era
   groupBy: GroupBy
+  available: Available
   onShowWholeDay: () => void
   onEdit: (rows: Shipment[]) => void
   onRemind: (rows: Shipment[], date: string) => void
   onClose: () => void
 }
 
-export default function DetailPanel({ date, groupKeyFilter, shipments, era, groupBy, onShowWholeDay, onEdit, onRemind, onClose }: Props) {
+export default function DetailPanel({ date, groupKeyFilter, shipments, era, groupBy, available: av, onShowWholeDay, onEdit, onRemind, onClose }: Props) {
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
@@ -77,15 +79,15 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
               <th>
                 <input type="checkbox" checked={allChosen} onChange={toggleAll} aria-label="เลือกทั้งหมด" />
               </th>
-              <th>SO</th>
-              <th>ลูกค้า</th>
-              <th>สินค้า</th>
-              <th className="num">จำนวน</th>
-              <th>Site</th>
-              <th>คนขับ</th>
-              <th>รถ</th>
-              <th>สถานะ</th>
-              <th>หมายเหตุ</th>
+              {av.so && <th>SO</th>}
+              {av.customer && <th>ลูกค้า</th>}
+              {av.item && <th>สินค้า</th>}
+              {av.qty && <th className="num">จำนวน</th>}
+              {av.site && <th>Site</th>}
+              {av.driver && <th>คนขับ</th>}
+              {av.truck && <th>รถ</th>}
+              {av.status && <th>สถานะ</th>}
+              {av.remark && <th>หมายเหตุ</th>}
             </tr>
           </thead>
           <tbody>
@@ -94,28 +96,34 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
                 <td>
                   <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} aria-label={`เลือก ${r.so}`} />
                 </td>
-                <td>
-                  {r.so}
-                  {r.editedAt && (
-                    <span className="edited" title="แก้ไขในแอป (import ครั้งถัดไปจะไม่ทับ)">
-                      {' '}
-                      ✎
-                    </span>
-                  )}
-                </td>
-                <td>{r.customerName || r.customerCode}</td>
-                <td title={r.description}>
-                  <div className="clip">{r.description}</div>
-                  <div className="muted small">{r.itemNo}</div>
-                </td>
-                <td className="num">
-                  {fmtQty(r.qty)} {r.unit}
-                </td>
-                <td>{r.site}</td>
-                <td>{r.driver}</td>
-                <td>{[r.truckNo, r.plate].filter(Boolean).join(' / ')}</td>
-                <td>{r.status}</td>
-                <td>{r.remark}</td>
+                {av.so && (
+                  <td>
+                    {r.so}
+                    {r.editedAt && (
+                      <span className="edited" title="แก้ไขในแอป (import ครั้งถัดไปจะไม่ทับ)">
+                        {' '}
+                        ✎
+                      </span>
+                    )}
+                  </td>
+                )}
+                {av.customer && <td>{r.customerName || r.customerCode}</td>}
+                {av.item && (
+                  <td title={r.description}>
+                    <div className="clip">{r.description}</div>
+                    <div className="muted small">{r.itemNo}</div>
+                  </td>
+                )}
+                {av.qty && (
+                  <td className="num">
+                    {fmtQty(r.qty)} {r.unit}
+                  </td>
+                )}
+                {av.site && <td>{r.site}</td>}
+                {av.driver && <td>{r.driver}</td>}
+                {av.truck && <td>{[r.truckNo, r.plate].filter(Boolean).join(' / ')}</td>}
+                {av.status && <td>{r.status}</td>}
+                {av.remark && <td>{r.remark}</td>}
               </tr>
             ))}
             {rows.length === 0 && (

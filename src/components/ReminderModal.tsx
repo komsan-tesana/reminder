@@ -49,7 +49,7 @@ export default function ReminderModal({ era, notify, reminders, draft, onNotify,
       <div className="form">
         <label className="row">
           <input type="checkbox" checked={notify.enabled} onChange={(e) => toggleEnabled(e.target.checked)} />
-          แจ้งเตือนสรุปงานวันนี้/พรุ่งนี้ (ขณะเปิดแท็บนี้ไว้)
+          แจ้งเตือนอัตโนมัติทุกวัน สรุปงานวันนี้และล่วงหน้า แยกเป็นรายวัน (ขณะเปิดแท็บนี้ไว้)
         </label>
         <div className="row">
           <label>
@@ -60,9 +60,20 @@ export default function ReminderModal({ era, notify, reminders, draft, onNotify,
             <input type="checkbox" checked={notify.today} onChange={(e) => onNotify({ ...notify, today: e.target.checked })} />
             วันนี้
           </label>
+          <label>
+            แจ้งล่วงหน้า
+            <select value={notify.daysAhead} onChange={(e) => onNotify({ ...notify, daysAhead: Number(e.target.value) })}>
+              <option value={0}>ไม่ล่วงหน้า</option>
+              {[1, 2, 3, 5, 7, 14].map((n) => (
+                <option key={n} value={n}>
+                  {n === 1 ? 'พรุ่งนี้' : `${n} วันข้างหน้า`}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="row">
-            <input type="checkbox" checked={notify.tomorrow} onChange={(e) => onNotify({ ...notify, tomorrow: e.target.checked })} />
-            พรุ่งนี้
+            <input type="checkbox" checked={notify.sound} onChange={(e) => onNotify({ ...notify, sound: e.target.checked })} />
+            🔊 เสียงแจ้งเตือน
           </label>
           <button onClick={onTest}>ทดสอบ</button>
         </div>
