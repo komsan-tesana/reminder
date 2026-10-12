@@ -79,7 +79,7 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
               <th>
                 <input type="checkbox" checked={allChosen} onChange={toggleAll} aria-label="เลือกทั้งหมด" />
               </th>
-              {av.so && <th>SO</th>}
+              {av.so && <th className="so">SO</th>}
               {av.customer && <th>ลูกค้า</th>}
               {av.item && <th>สินค้า</th>}
               {av.qty && <th className="num">จำนวน</th>}
@@ -97,7 +97,7 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
                   <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} aria-label={`เลือก ${r.so}`} />
                 </td>
                 {av.so && (
-                  <td>
+                  <td className="nw so">
                     {r.so}
                     {r.editedAt && (
                       <span className="edited" title="แก้ไขในแอป (import ครั้งถัดไปจะไม่ทับ)">
@@ -107,7 +107,7 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
                     )}
                   </td>
                 )}
-                {av.customer && <td>{r.customerName || r.customerCode}</td>}
+                {av.customer && <td className="cust">{r.customerName || r.customerCode}</td>}
                 {av.item && (
                   <td title={r.description}>
                     <div className="clip">{r.description}</div>
@@ -119,10 +119,10 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
                     {fmtQty(r.qty)} {r.unit}
                   </td>
                 )}
-                {av.site && <td>{r.site}</td>}
-                {av.driver && <td>{r.driver}</td>}
-                {av.truck && <td>{[r.truckNo, r.plate].filter(Boolean).join(' / ')}</td>}
-                {av.status && <td>{r.status}</td>}
+                {av.site && <td className="nw">{r.site}</td>}
+                {av.driver && <td className="nw">{r.driver}</td>}
+                {av.truck && <td className="nw">{[r.truckNo, r.plate].filter(Boolean).join(' / ')}</td>}
+                {av.status && <td className="nw">{r.status}</td>}
                 {av.remark && <td>{r.remark}</td>}
               </tr>
             ))}

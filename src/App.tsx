@@ -10,7 +10,9 @@ import { availableFields, effectiveGroupBy, groupOptions } from './lib/available
 import { applyFilters, NO_FILTERS } from './lib/filters'
 import type { Group, Tone } from './lib/group'
 import { dailyDigest, dueReminders } from './lib/reminders'
+import { fmtDate } from './lib/format'
 import { playChime } from './lib/sound'
+import { makeSample } from './lib/sample'
 import { systemNotify, useReminderEngine } from './lib/useReminderEngine'
 import type { Filters, NotifySettings, Reminder, Shipment } from './types'
 
@@ -24,7 +26,20 @@ const SettingsModal = lazy(() => import('./components/SettingsModal'))
 type Selection = { date: string; key: string | null }
 type Dialog = 'import' | 'data' | 'reminders' | 'settings' | null
 
-const latestDate = (items: Shipment[]) => items.reduce<string | null>((m, s) => (!m || s.date > m ? s.date : m), null)
+/** The data date closest to today, so the calendar opens where the action is (not the file's last row). */
+function nearestDate(items: Shipment[]): string | null {
+  const today = Date.now()
+  let best: string | null = null
+  let bestGap = Infinity
+  for (const s of items) {
+    const gap = Math.abs(new Date(s.date).getTime() - today)
+    if (gap < bestGap) {
+      best = s.date
+      bestGap = gap
+    }
+  }
+  return best
+}
 
 /** true while the media query matches */
 function useMedia(query: string): boolean {
@@ -63,7 +78,7 @@ export default function App() {
     Promise.all([db.shipments.toArray(), db.reminders.toArray()]).then(([all, rem]) => {
       setShipments(all)
       setReminders(rem)
-      setFocusDate(latestDate(all))
+      setFocusDate(nearestDate(all))
       setLoaded(true)
     })
   }, [])
@@ -83,6 +98,16 @@ export default function App() {
   const available = useMemo(() => availableFields(shipments), [shipments])
   const groupBy = effectiveGroupBy(settings.groupBy, available)
   const groupChoices = groupOptions(available)
+  const range = useMemo(() => {
+    if (!shipments.length) return null
+    let min = shipments[0].date
+    let max = min
+    for (const s of shipments) {
+      if (s.date < min) min = s.date
+      if (s.date > max) max = s.date
+    }
+    return { min, max }
+  }, [shipments])
 
   const { display } = settings
   // a tone is only meaningful when the data can produce it (e.g. no driver/truck column -> no "assigned")
@@ -124,7 +149,7 @@ export default function App() {
 
   async function afterImport(items: Shipment[], kept: number) {
     setShipments(await db.shipments.toArray())
-    setFocusDate(latestDate(items))
+    setFocusDate(nearestDate(items))
     setSelection(null)
     setDialog(null)
     if (kept > 0) push({ title: 'นำเข้าเสร็จ', body: `ข้าม ${kept} รายการที่คุณแก้ไขไว้ในแอป (ไม่ถูกทับ)` })
@@ -145,8 +170,15 @@ export default function App() {
     const [all, rem] = await Promise.all([db.shipments.toArray(), db.reminders.toArray()])
     setShipments(all)
     setReminders(rem)
-    setFocusDate(latestDate(all))
+    setFocusDate(nearestDate(all))
     setSelection(null)
+  }
+
+  async function loadSample() {
+    const rows = makeSample()
+    await db.shipments.bulkPut(rows)
+    setShipments(rows)
+    setFocusDate(nearestDate(rows))
   }
 
   async function clearAll() {
@@ -209,23 +241,6 @@ export default function App() {
         </span>
         <span className="muted">{shipments.length.toLocaleString()} รายการ</span>
         <div className="spacer" />
-        <label>
-          จัดกลุ่ม
-          <select value={groupBy} onChange={(e) => update({ groupBy: e.target.value as Settings['groupBy'] })}>
-            {groupChoices.map((g) => (
-              <option key={g} value={g}>
-                {GROUP_LABEL[g]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          ปี
-          <select value={settings.era} onChange={(e) => update({ era: e.target.value as Settings['era'] })}>
-            <option value="BE">พ.ศ.</option>
-            <option value="CE">ค.ศ.</option>
-          </select>
-        </label>
         <button className="primary" onClick={() => setDialog('import')}>
           นำเข้า Excel
         </button>
@@ -272,8 +287,14 @@ export default function App() {
         <section className="cal">
           {loaded && shipments.length === 0 && (
             <div className="empty">
-              ยังไม่มีข้อมูล — กด “นำเข้า Excel” เพื่อเริ่มต้น
-              <br />
+              <b>ยังไม่มีข้อมูล</b>
+              <span>นำเข้าไฟล์ Excel (.xlsx) หรือ CSV หัวคอลัมน์จะถูกจับคู่ให้อัตโนมัติ และแก้ได้ก่อนยืนยัน</span>
+              <span className="row center">
+                <button className="primary" onClick={() => setDialog('import')}>
+                  นำเข้า Excel
+                </button>
+                <button onClick={loadSample}>ลองด้วยข้อมูลตัวอย่าง</button>
+              </span>
               <span className="muted small">ข้อมูลถูกเก็บในเบราว์เซอร์นี้เท่านั้น ไม่ส่งไปที่ใด</span>
             </div>
           )}
@@ -286,15 +307,31 @@ export default function App() {
             onSelectGroup={pickGroup}
             onSelectDate={(date) => setSelection({ date, key: null })}
           />
-          {legend.length > 0 && (
-            <div className="legend">
-              {legend.map((l) => (
-                <span key={l.tone}>
-                  <i className={`dot tone-${l.tone}`} /> {l.label}
-                </span>
-              ))}
-            </div>
-          )}
+          <div className="legend">
+            {legend.map((l) => (
+              <span key={l.tone}>
+                <i className={`dot tone-${l.tone}`} /> {l.label}
+              </span>
+            ))}
+            <span className="spacer" />
+            {range && (
+              <span className="hide-narrow">
+                ข้อมูล {fmtDate(range.min, settings.era, 'D MMM YYYY')} – {fmtDate(range.max, settings.era, 'D MMM YYYY')}
+              </span>
+            )}
+            {shipments.length > 0 && (
+              <label className="legend-group">
+                จัดกลุ่ม
+                <select value={groupBy} onChange={(e) => update({ groupBy: e.target.value as Settings['groupBy'] })}>
+                  {groupChoices.map((g) => (
+                    <option key={g} value={g}>
+                      {GROUP_LABEL[g]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
         </section>
         {selection && (
           <ResizeHandle
@@ -350,7 +387,16 @@ export default function App() {
             onClose={() => setDialog(null)}
           />
         )}
-        {dialog === 'settings' && <SettingsModal display={display} onChange={(d) => update({ display: d })} onClose={() => setDialog(null)} />}
+        {dialog === 'settings' && <SettingsModal
+            display={display}
+            era={settings.era}
+            groupBy={groupBy}
+            groupChoices={groupChoices.map((g) => ({ value: g, label: GROUP_LABEL[g] }))}
+            onEra={(era) => update({ era })}
+            onGroupBy={(g) => update({ groupBy: g })}
+            onChange={(d) => update({ display: d })}
+            onClose={() => setDialog(null)}
+          />}
         {editing && <EditModal rows={editing} all={shipments} era={settings.era} onSave={saveEdit} onClose={() => setEditing(null)} />}
       </Suspense>
     </div>
