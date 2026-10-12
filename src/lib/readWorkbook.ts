@@ -13,6 +13,6 @@ export async function readWorkbook(file: File): Promise<ParsedSheet> {
       worker.terminate()
       reject(new Error(e.message || 'อ่านไฟล์ไม่สำเร็จ'))
     }
-    worker.postMessage(buf, [buf])
+    worker.postMessage({ buf, name: file.name }, [buf])
   })
 }

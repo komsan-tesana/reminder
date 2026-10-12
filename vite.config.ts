@@ -9,7 +9,7 @@ export default defineConfig({
   base: './',
   plugins: [react()],
   // GitHub Pages serves the main branch's /docs folder
-  build: { outDir: 'docs', emptyOutDir: true },
+  build: { outDir: 'docs', emptyOutDir: true, chunkSizeWarningLimit: 700 },
   worker: { format: 'es' },
   define: {
     __APP_VERSION__: JSON.stringify(version),
