@@ -8,6 +8,8 @@ const { version } = JSON.parse(readFileSync(new URL('./package.json', import.met
 export default defineConfig({
   base: './',
   plugins: [react()],
+  // GitHub Pages serves the main branch's /docs folder
+  build: { outDir: 'docs', emptyOutDir: true },
   worker: { format: 'es' },
   define: {
     __APP_VERSION__: JSON.stringify(version),

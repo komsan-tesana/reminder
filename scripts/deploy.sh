@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build on `develop`, then release to `main`.
-# Pushing `main` triggers .github/workflows/deploy.yml, which publishes to GitHub Pages.
+# The build goes to /docs, which GitHub Pages serves from the `main` branch.
 # Must be run from the `develop` branch.
 #
 # Usage: scripts/deploy.sh [patch|minor|major]   (default: patch)
@@ -57,7 +57,7 @@ if ! npm run build; then
   git checkout -- package.json package-lock.json
   exit 1
 fi
-git add package.json package-lock.json
+git add package.json package-lock.json docs
 git commit -q -m "chore: release v$VERSION"
 git tag "v$VERSION"
 
@@ -68,7 +68,7 @@ trap 'git checkout "$SOURCE_BRANCH" >/dev/null 2>&1 || true' EXIT
 git merge --ff-only "$REMOTE/$DEPLOY_BRANCH" 2>/dev/null || true
 git merge --no-ff "$SOURCE_BRANCH" -m "Release: merge $SOURCE_BRANCH into $DEPLOY_BRANCH"
 
-echo "→ push $SOURCE_BRANCH, $DEPLOY_BRANCH และ tag v$VERSION (จะ trigger GitHub Actions deploy)"
+echo "→ push $SOURCE_BRANCH, $DEPLOY_BRANCH และ tag v$VERSION (GitHub Pages จะอัปเดตเองจาก main:/docs)"
 git push "$REMOTE" "$SOURCE_BRANCH" "$DEPLOY_BRANCH" "v$VERSION"
 
-echo "✓ deploy v$VERSION เสร็จแล้ว ดูสถานะ deploy ที่แท็บ Actions ของ repo"
+echo "✓ deploy v$VERSION เสร็จแล้ว รอ Pages อัปเดตสักครู่ (ดูที่ Settings → Pages)"
