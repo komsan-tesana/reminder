@@ -11,11 +11,14 @@ type Props = {
   era: Era
   groupBy: GroupBy
   onShowWholeDay: () => void
+  onEdit: (rows: Shipment[]) => void
+  onRemind: (rows: Shipment[], date: string) => void
   onClose: () => void
 }
 
-export default function DetailPanel({ date, groupKeyFilter, shipments, era, groupBy, onShowWholeDay, onClose }: Props) {
+export default function DetailPanel({ date, groupKeyFilter, shipments, era, groupBy, onShowWholeDay, onEdit, onRemind, onClose }: Props) {
   const [q, setQ] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const dayRows = useMemo(() => shipments.filter((s) => s.date === date), [shipments, date])
   const rows = useMemo(() => {
@@ -25,10 +28,23 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
     return scoped.filter((s) => Object.values(s).some((v) => typeof v === 'string' && v.toLowerCase().includes(needle)))
   }, [dayRows, groupKeyFilter, groupBy, q])
 
+  // only rows that are still visible count as selected (edits can move rows away)
+  const chosen = rows.filter((r) => selected.has(r.id))
+  const allChosen = rows.length > 0 && chosen.length === rows.length
   const totalQty = rows.reduce((a, r) => a + r.qty, 0)
 
+  const toggle = (id: string) =>
+    setSelected((s) => {
+      const n = new Set(s)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  const toggleAll = () => setSelected(allChosen ? new Set() : new Set(rows.map((r) => r.id)))
+  const target = chosen.length ? chosen : rows
+
   return (
-    <aside className="panel">
+    <aside className="panel" aria-label="รายละเอียดรายการ">
       <header>
         <div>
           <h2>{fmtDate(date, era, 'dddd D MMMM YYYY')}</h2>
@@ -42,15 +58,25 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
         </button>
       </header>
       <div className="panel-tools">
-        <input placeholder="ค้นหา SO / ลูกค้า / สินค้า / คนขับ…" value={q} onChange={(e) => setQ(e.target.value)} />
-        {groupKeyFilter && (
-          <button onClick={onShowWholeDay}>ดูทั้งวัน ({dayRows.length})</button>
-        )}
+        <input type="search" placeholder="ค้นหาในรายการนี้…" aria-label="ค้นหาในรายการนี้" value={q} onChange={(e) => setQ(e.target.value)} />
+        {groupKeyFilter && <button onClick={onShowWholeDay}>ดูทั้งวัน ({dayRows.length})</button>}
+      </div>
+      <div className="panel-tools">
+        <button className="primary" disabled={rows.length === 0} onClick={() => onEdit(target)}>
+          แก้ไข ({target.length})
+        </button>
+        <button disabled={rows.length === 0} onClick={() => onRemind(target, date)}>
+          ตั้งเตือน
+        </button>
+        <span className="muted small">{chosen.length ? `เลือก ${chosen.length}` : 'ไม่ได้เลือก = ทั้งหมดที่แสดง'}</span>
       </div>
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
+              <th>
+                <input type="checkbox" checked={allChosen} onChange={toggleAll} aria-label="เลือกทั้งหมด" />
+              </th>
               <th>SO</th>
               <th>ลูกค้า</th>
               <th>สินค้า</th>
@@ -64,8 +90,19 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id}>
-                <td>{r.so}</td>
+              <tr key={r.id} className={selected.has(r.id) ? 'sel' : ''}>
+                <td>
+                  <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} aria-label={`เลือก ${r.so}`} />
+                </td>
+                <td>
+                  {r.so}
+                  {r.editedAt && (
+                    <span className="edited" title="แก้ไขในแอป (import ครั้งถัดไปจะไม่ทับ)">
+                      {' '}
+                      ✎
+                    </span>
+                  )}
+                </td>
                 <td>{r.customerName || r.customerCode}</td>
                 <td title={r.description}>
                   <div className="clip">{r.description}</div>
@@ -83,7 +120,7 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={9} className="muted">
+                <td colSpan={10} className="muted">
                   ไม่พบรายการ
                 </td>
               </tr>

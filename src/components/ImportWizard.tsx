@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { FIELDS, type EraMode, type FieldKey, type Mapping, type ParsedSheet, type Shipment } from '../types'
 import { autoMap, buildShipments } from '../lib/mapping'
 import { detectEra } from '../lib/dateParse'
@@ -8,7 +8,7 @@ import { fmtDate } from '../lib/format'
 
 type Props = {
   onClose: () => void
-  onImported: (items: Shipment[]) => void
+  onImported: (items: Shipment[], kept: number) => void
 }
 
 export default function ImportWizard({ onClose, onImported }: Props) {
@@ -20,6 +20,12 @@ export default function ImportWizard({ onClose, onImported }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const input = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   async function pick(f: File | undefined) {
     if (!f) return
@@ -54,8 +60,8 @@ export default function ImportWizard({ onClose, onImported }: Props) {
     setBusy(true)
     try {
       saveMapping(sheet.headers, mapping)
-      await commitImport(result.items, mode)
-      onImported(result.items)
+      const { kept } = await commitImport(result.items, mode)
+      onImported(result.items, kept)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setBusy(false)
@@ -79,7 +85,7 @@ export default function ImportWizard({ onClose, onImported }: Props) {
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label="นำเข้าไฟล์ Excel" onClick={(e) => e.stopPropagation()}>
         <header>
           <h2>นำเข้าไฟล์ Excel</h2>
           <button className="icon" onClick={onClose} aria-label="ปิด">

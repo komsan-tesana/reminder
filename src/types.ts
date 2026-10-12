@@ -53,6 +53,8 @@ export type Shipment = {
   source: string
   /** original columns, header -> value */
   raw: Record<string, unknown>
+  /** set when edited in the app; later imports will not overwrite these rows */
+  editedAt?: number
 }
 
 export type RowError = { row: number; reason: string }
@@ -62,3 +64,17 @@ export type ParsedSheet = {
   headers: string[]
   rows: unknown[][]
 }
+
+export type Filters = { q: string; site: string; status: string; driver: string; customer: string }
+
+/** `at` is a local date-time, 'YYYY-MM-DDTHH:mm' */
+export type Reminder = {
+  id: string
+  title: string
+  at: string
+  note?: string
+  done: boolean
+  firedAt?: number
+}
+
+export type NotifySettings = { enabled: boolean; time: string; today: boolean; tomorrow: boolean }
