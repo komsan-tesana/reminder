@@ -6,7 +6,7 @@ import interactionPlugin from '@fullcalendar/interaction'
 import thLocale from '@fullcalendar/core/locales/th'
 import dayjs from 'dayjs'
 import { buildGroups, type Group, type Tone } from '../lib/group'
-import { fmtDate } from '../lib/format'
+import { fmtDate, shortName } from '../lib/format'
 import type { Era, GroupBy, Shipment } from '../types'
 
 type Props = {
@@ -31,12 +31,13 @@ export default function CalendarView({ shipments, era, groupBy, toneVisible, foc
     () =>
       groups.map((g) => ({
         id: g.id,
-        title: `${g.label} (${g.rows.length})`,
+        title: `${groupBy === 'customer' ? shortName(g.label) : g.label} (${g.rows.length})`,
+        extendedProps: { full: `${g.label} · ${g.rows.length} รายการ` },
         start: g.date,
         allDay: true,
         classNames: [`tone-${toneVisible[g.tone] ? g.tone : 'none'}`],
       })),
-    [groups, toneVisible],
+    [groups, toneVisible, groupBy],
   )
 
   useEffect(() => {
@@ -68,6 +69,10 @@ export default function CalendarView({ shipments, era, groupBy, toneVisible, foc
       events={events}
       dayMaxEvents={4}
       height="100%"
+      eventDidMount={(info) => {
+        // full name on hover; the chip itself is truncated in narrow cells
+        info.el.title = String(info.event.extendedProps.full ?? '')
+      }}
       eventClick={(info) => {
         const g = byId.get(info.event.id)
         if (g) onSelectGroup(g)

@@ -1,9 +1,15 @@
 import Modal from './Modal'
 import { DEFAULT_TONES, type DisplaySettings } from '../lib/db'
 import type { Tone } from '../lib/group'
+import type { Era, GroupBy } from '../types'
 
 type Props = {
   display: DisplaySettings
+  era: Era
+  groupBy: GroupBy
+  groupChoices: { value: GroupBy; label: string }[]
+  onEra: (e: Era) => void
+  onGroupBy: (g: GroupBy) => void
   onChange: (d: DisplaySettings) => void
   onClose: () => void
 }
@@ -14,7 +20,7 @@ const TONES: { tone: Tone; label: string; hint: string }[] = [
   { tone: 'unassigned', label: 'ยังไม่จัดรถ', hint: 'ยังไม่มีคนขับ/รถ' },
 ]
 
-export default function SettingsModal({ display, onChange, onClose }: Props) {
+export default function SettingsModal({ display, era, groupBy, groupChoices, onEra, onGroupBy, onChange, onClose }: Props) {
   const setTone = (tone: Tone, patch: Partial<DisplaySettings['tones'][Tone]>) =>
     onChange({ ...display, tones: { ...display.tones, [tone]: { ...display.tones[tone], ...patch } } })
 
@@ -31,6 +37,29 @@ export default function SettingsModal({ display, onChange, onClose }: Props) {
         </>
       }
     >
+      <h3>ปฏิทิน</h3>
+      <div className="form">
+        <div className="row">
+          <label>
+            จัดกลุ่มชิปตาม
+            <select value={groupBy} onChange={(e) => onGroupBy(e.target.value as GroupBy)}>
+              {groupChoices.map((g) => (
+                <option key={g.value} value={g.value}>
+                  {g.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            ปีที่แสดง
+            <select value={era} onChange={(e) => onEra(e.target.value as Era)}>
+              <option value="BE">พ.ศ.</option>
+              <option value="CE">ค.ศ.</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
       <h3>สีสถานะงานบนปฏิทิน</h3>
       <div className="form">
         <label className="row">

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import SearchSelect, { type Option } from './SearchSelect'
 import type { Available } from '../lib/available'
 import { customerOf, EMPTY, hasFilters, NO_FILTERS, uniqueValues } from '../lib/filters'
@@ -29,6 +29,9 @@ export default function FilterBar({ shipments, available, filters, shown, onChan
     [shipments],
   )
   const set = (patch: Partial<Filters>) => onChange({ ...filters, ...patch })
+  // on narrow screens the dropdowns fold away behind one button
+  const [open, setOpen] = useState(false)
+  const active = (['site', 'status', 'driver', 'customer'] as const).filter((k) => filters[k] !== '').length
 
   return (
     <div className="filterbar">
@@ -39,10 +42,15 @@ export default function FilterBar({ shipments, available, filters, shown, onChan
         value={filters.q}
         onChange={(e) => set({ q: e.target.value })}
       />
+      <button className={`filter-toggle ${active ? 'on' : ''}`} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        ตัวกรอง{active > 0 && ` (${active})`} {open ? '▴' : '▾'}
+      </button>
+      <div className={`filter-selects ${open ? 'open' : ''}`}>
       {available.site && <SearchSelect title="Site" value={filters.site} options={opts.site} onChange={(site) => set({ site })} />}
       {available.status && <SearchSelect title="สถานะ" value={filters.status} options={opts.status} onChange={(status) => set({ status })} />}
       {available.driver && <SearchSelect title="คนขับ" value={filters.driver} options={opts.driver} onChange={(driver) => set({ driver })} />}
       {available.customer && <SearchSelect title="ลูกค้า" value={filters.customer} options={opts.customer} onChange={(customer) => set({ customer })} />}
+      </div>
       {hasFilters(filters) && (
         <>
           <span className="muted small">{shown.toLocaleString()} รายการ</span>

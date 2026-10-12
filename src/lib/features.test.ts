@@ -136,3 +136,22 @@ describe('sound', () => {
     expect(await playChime()).toBe(false)
   })
 })
+
+describe('shortName / sample', () => {
+  it('drops legal prefixes and suffixes but keeps the distinguishing part', async () => {
+    const { shortName } = await import('./format')
+    expect(shortName('บริษัท มาสด้า โลจิสติกส์ แอนด์ ยูเซ็น(เอเชีย) จำกัด')).toBe('มาสด้า โลจิสติกส์ แอนด์ ยูเซ็น(เอเชีย)')
+    expect(shortName('บริษัท วีนิไทย จำกัด(มหาชน)')).toBe('วีนิไทย')
+    expect(shortName('หจก. สยามแพ็คเกจจิ้ง')).toBe('สยามแพ็คเกจจิ้ง')
+    expect(shortName('Acme Co.')).toBe('Acme Co.')
+    expect(shortName('บริษัท จำกัด')).toBe('บริษัท จำกัด') // never returns empty
+  })
+  it('builds sample data around today with unique ids and valid dates', async () => {
+    const { makeSample } = await import('./sample')
+    const { parseDate } = await import('./dateParse')
+    const rows = makeSample(new Date(2026, 9, 13))
+    expect(new Set(rows.map((r) => r.id)).size).toBe(rows.length)
+    expect(rows.every((r) => parseDate(r.date, 'CE') === r.date)).toBe(true)
+    expect(rows.some((r) => r.date === '2026-10-13')).toBe(true)
+  })
+})
