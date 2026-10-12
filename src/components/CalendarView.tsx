@@ -24,6 +24,7 @@ type TitleArg = { date: { year: number; month: number; day: number } }
 
 export default function CalendarView({ shipments, era, groupBy, toneVisible, focusDate, onSelectGroup, onSelectDate }: Props) {
   const ref = useRef<FullCalendar>(null)
+  const host = useRef<HTMLDivElement>(null)
   const groups = useMemo(() => buildGroups(shipments, groupBy), [shipments, groupBy])
   const byId = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups])
   const events = useMemo(
@@ -39,6 +40,14 @@ export default function CalendarView({ shipments, era, groupBy, toneVisible, foc
   )
 
   useEffect(() => {
+    const el = host.current
+    if (!el) return
+    const ro = new ResizeObserver(() => ref.current?.getApi().updateSize())
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  useEffect(() => {
     if (focusDate) ref.current?.getApi().gotoDate(focusDate)
   }, [focusDate])
 
@@ -47,6 +56,7 @@ export default function CalendarView({ shipments, era, groupBy, toneVisible, foc
   const title = ({ date }: TitleArg) => fmtDate(dayjs(new Date(date.year, date.month, date.day)).format('YYYY-MM-DD'), era, 'MMMM YYYY')
 
   return (
+    <div className="fc-host" ref={host}>
     <FullCalendar
       ref={ref}
       plugins={[dayGridPlugin, listPlugin, interactionPlugin]}
@@ -64,5 +74,6 @@ export default function CalendarView({ shipments, era, groupBy, toneVisible, foc
       }}
       dateClick={(info) => onSelectDate(info.dateStr)}
     />
+    </div>
   )
 }

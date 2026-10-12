@@ -1,10 +1,11 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import CalendarView from './components/CalendarView'
 import DetailPanel from './components/DetailPanel'
 import FilterBar from './components/FilterBar'
+import ResizeHandle, { EDGE_W, MAX_VH, type PanelSize } from './components/ResizeHandle'
 import Toasts, { type Toast } from './components/Toasts'
 import type { ReminderDraft } from './components/ReminderModal'
-import { db, editShipments, loadSettings, restoreBackup, saveSettings, type Settings } from './lib/db'
+import { db, editShipments, loadPanelSize, loadSettings, restoreBackup, savePanelSize, saveSettings, type Settings } from './lib/db'
 import { availableFields, effectiveGroupBy, groupOptions } from './lib/available'
 import { applyFilters, NO_FILTERS } from './lib/filters'
 import type { Group, Tone } from './lib/group'
@@ -25,6 +26,18 @@ type Dialog = 'import' | 'data' | 'reminders' | 'settings' | null
 
 const latestDate = (items: Shipment[]) => items.reduce<string | null>((m, s) => (!m || s.date > m ? s.date : m), null)
 
+/** true while the media query matches */
+function useMedia(query: string): boolean {
+  const [match, setMatch] = useState(() => window.matchMedia(query).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(query)
+    const on = () => setMatch(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [query])
+  return match
+}
+
 let toastSeq = 0
 
 const GROUP_LABEL = { customer: 'ลูกค้า', so: 'Sales Order', truck: 'รถ' } as const
@@ -42,6 +55,9 @@ export default function App() {
   const [focusDate, setFocusDate] = useState<string | null>(null)
   const [toasts, setToasts] = useState<Toast[]>([])
   const [bannerOff, setBannerOff] = useState(false)
+  const [panelSize, setPanelSize] = useState<PanelSize>(loadPanelSize)
+  const stacked = useMedia('(max-width: 820px)')
+  const mainRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     Promise.all([db.shipments.toArray(), db.reminders.toArray()]).then(([all, rem]) => {
@@ -174,6 +190,14 @@ export default function App() {
     setDialog('reminders')
   }
 
+  function resizePanel(patch: Partial<PanelSize>) {
+    setPanelSize((s) => {
+      const next = { ...s, ...patch }
+      savePanelSize(next)
+      return next
+    })
+  }
+
   const pickGroup = (g: Group) => setSelection({ date: g.date, key: g.key })
 
   return (
@@ -233,7 +257,18 @@ export default function App() {
         </div>
       )}
 
-      <main className={selection ? 'with-panel' : ''}>
+      <main
+        ref={mainRef}
+        className={selection ? 'with-panel' : ''}
+        style={
+          {
+            // capped so a saved size never swallows a smaller window
+            // same ceilings ResizeHandle enforces while dragging (see MAX_VH / EDGE in that file)
+            '--panel-w': panelSize.w ? `min(${panelSize.w}px, 100vw - ${EDGE_W}px)` : undefined,
+            '--panel-h': panelSize.h ? `min(${panelSize.h}px, ${MAX_VH * 100}vh)` : undefined,
+          } as React.CSSProperties
+        }
+      >
         <section className="cal">
           {loaded && shipments.length === 0 && (
             <div className="empty">
@@ -261,6 +296,14 @@ export default function App() {
             </div>
           )}
         </section>
+        {selection && (
+          <ResizeHandle
+            container={mainRef}
+            stacked={stacked}
+            onResize={(px) => resizePanel(stacked ? { h: px } : { w: px })}
+            onReset={() => resizePanel(stacked ? { h: null } : { w: null })}
+          />
+        )}
         {selection && (
           <DetailPanel
             key={`${selection.date}|${selection.key}`}

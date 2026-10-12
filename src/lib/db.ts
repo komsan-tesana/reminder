@@ -67,6 +67,14 @@ export function loadSettings(): Settings {
     display: { statusColors: s.display?.statusColors ?? true, tones },
   }
 }
+const PANEL_KEY = 'reminder.panel.v1'
+export function loadPanelSize(): { w: number | null; h: number | null } {
+  const v = read<{ w: unknown; h: unknown }>(PANEL_KEY, { w: null, h: null })
+  const ok = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : null)
+  return { w: ok(v.w), h: ok(v.h) }
+}
+export const savePanelSize = (s: { w: number | null; h: number | null }) => write(PANEL_KEY, s)
+
 export const saveSettings = (s: Settings) => write(SETTINGS_KEY, s)
 
 export function lastDigestDate(): string | null {

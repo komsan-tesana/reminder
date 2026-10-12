@@ -46,9 +46,17 @@ select, input { border: 1px solid var(--line); background: var(--card); border-r
 .spacer { flex: 1; }
 
 main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr; gap: 12px; padding: 12px; }
-main.with-panel { grid-template-columns: minmax(0, 1fr) minmax(420px, 46%); }
+main.with-panel { grid-template-columns: minmax(0, 1fr) 12px var(--panel-w, minmax(420px, 46%)); gap: 0; }
+.resizer { cursor: col-resize; touch-action: none; position: relative; outline: none; }
+.resizer::before { content: ''; position: absolute; top: 12px; bottom: 12px; left: 50%; width: 4px; margin-left: -2px; border-radius: 2px; background: var(--line); transition: background 0.15s; }
+.resizer:hover::before, .resizer:focus-visible::before, .resizer.dragging::before { background: var(--accent); }
+.resizer.stacked { cursor: row-resize; }
+.resizer.stacked::before { top: 50%; bottom: auto; left: 12px; right: 12px; width: auto; height: 4px; margin: -2px 0 0; }
+body:has(.resizer.dragging) { user-select: none; cursor: col-resize; }
+body:has(.resizer.stacked.dragging) { cursor: row-resize; }
 .cal { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px; min-height: 0; display: flex; flex-direction: column; }
-.cal > .fc { flex: 1; min-height: 0; }
+.fc-host { flex: 1; min-height: 0; position: relative; }
+.fc-host > .fc { position: absolute; inset: 0; }
 .empty { position: absolute; inset: 0; z-index: 5; display: grid; place-content: center; text-align: center; background: color-mix(in srgb, var(--card) 85%, transparent); pointer-events: none; font-size: 16px; }
 .legend { padding-top: 8px; color: var(--muted); font-size: 12px; display: flex; gap: 14px; align-items: center; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; }
@@ -95,7 +103,7 @@ td .clip, td.clip { max-width: 260px; overflow: hidden; text-overflow: ellipsis;
 .preview { max-height: 220px; flex: none; }
 
 @media (max-width: 820px) {
-  main.with-panel { grid-template-columns: 1fr; grid-template-rows: minmax(300px, 1fr) minmax(0, 1fr); }
+  main.with-panel { grid-template-columns: 1fr; grid-template-rows: minmax(240px, 1fr) 12px var(--panel-h, minmax(0, 1fr)); }
   .fc .fc-toolbar { flex-wrap: wrap; gap: 6px; }
 }
 
