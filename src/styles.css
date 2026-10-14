@@ -277,3 +277,15 @@ button.danger:hover:not(:disabled) { background: var(--warn); color: var(--bg); 
 .fc .fc-list-event.fc-event { background: transparent; border: 0; box-shadow: none; }
 .fc .fc-list-event:hover td { background: color-mix(in srgb, var(--accent) 16%, var(--bg)); }
 .fc .fc-list-event-time, .fc .fc-list-event-title a { color: var(--accent); }
+
+/* phone: calendar shows per-day counts; keep the last rows reachable above the bottom sheet's peek */
+.fc-host.compact .fc-daygrid-day-top { flex-direction: column; align-items: flex-start; }
+.day-count { margin: 2px 0 0 6px; min-width: 22px; padding: 1px 6px; border-radius: 999px; text-align: center; font-size: 12px; font-weight: 700; color: #fff; background: var(--accent-fill); }
+.day-count.tone-assigned { background: var(--assigned); }
+.day-count.tone-pending { background: var(--pending); }
+.day-count.tone-unassigned { background: var(--unassigned); }
+main.sheet-open { padding-bottom: calc(34dvh + env(safe-area-inset-bottom)); }
+@media (max-width: 820px) {
+  /* the page scrolls on a phone, so the calendar keeps a usable height even when the sheet's padding is added */
+  .cal { min-height: 560px; }
+}

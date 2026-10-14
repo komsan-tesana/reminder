@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import CalendarView from './components/CalendarView'
 import DetailPanel from './components/DetailPanel'
 import FilterBar from './components/FilterBar'
+import BottomSheet from './components/BottomSheet'
 import ResizeHandle, { EDGE_W, MAX_VH, type PanelSize } from './components/ResizeHandle'
 import Toasts, { type Toast } from './components/Toasts'
 import type { ReminderDraft } from './components/ReminderModal'
@@ -248,6 +249,20 @@ export default function App() {
     setEditing(null)
   }
 
+  // On a phone the sheet gets a history entry, so the Back button / swipe-back closes it instead of leaving the app
+  const sheetOpen = stacked && !!selection
+  useEffect(() => {
+    if (!sheetOpen) return
+    history.pushState({ sheet: 1 }, '')
+    const onPop = () => setSelection(null)
+    window.addEventListener('popstate', onPop)
+    return () => {
+      window.removeEventListener('popstate', onPop)
+      if (history.state?.sheet) history.back() // closed by other means: drop our entry
+    }
+  }, [sheetOpen])
+  const closeSheet = () => setSelection(null)
+
   async function removeRows(rows: Shipment[]) {
     const ids = new Set(rows.map((r) => r.id))
     await deleteShipments([...ids])
@@ -410,7 +425,7 @@ export default function App() {
 
       <main
         ref={mainRef}
-        className={selection ? 'with-panel' : ''}
+        className={selection ? (stacked ? 'sheet-open' : 'with-panel') : ''}
         style={
           {
             // capped so a saved size never swallows a smaller window
@@ -440,6 +455,7 @@ export default function App() {
             groupBy={groupBy}
             toneVisible={toneVisible}
             focusDate={focusDate}
+            compact={stacked}
             onSelectGroup={pickGroup}
             onSelectDate={(date) => setSelection({ date, key: null })}
           />
@@ -469,15 +485,15 @@ export default function App() {
             )}
           </div>
         </section>
-        {selection && (
+        {selection && !stacked && (
           <ResizeHandle
             container={mainRef}
-            stacked={stacked}
-            onResize={(px) => resizePanel(stacked ? { h: px } : { w: px })}
-            onReset={() => resizePanel(stacked ? { h: null } : { w: null })}
+            stacked={false}
+            onResize={(px) => resizePanel({ w: px })}
+            onReset={() => resizePanel({ w: null })}
           />
         )}
-        {selection && (
+        {selection && !stacked && (
           <DetailPanel
             key={`${selection.date}|${selection.key}`}
             date={selection.date}
@@ -492,6 +508,28 @@ export default function App() {
             onRemind={remindFor}
             onClose={() => setSelection(null)}
           />
+        )}
+        {selection && stacked && (
+          <BottomSheet openKey={`${selection.date}|${selection.key}`} onClose={closeSheet}>
+            {(expanded) => (
+              <DetailPanel
+                key={`${selection.date}|${selection.key}`}
+                compact
+                expanded={expanded}
+                date={selection.date}
+                groupKeyFilter={selection.key}
+                shipments={visible}
+                era={settings.era}
+                groupBy={groupBy}
+                available={available}
+                onShowWholeDay={() => setSelection({ date: selection.date, key: null })}
+                onEdit={setEditing}
+                onDelete={removeRows}
+                onRemind={remindFor}
+                onClose={closeSheet}
+              />
+            )}
+          </BottomSheet>
         )}
       </main>
 

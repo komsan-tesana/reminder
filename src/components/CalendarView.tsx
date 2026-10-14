@@ -16,20 +16,32 @@ type Props = {
   /** tones whose colour is shown; hidden ones render as a neutral chip */
   toneVisible: Record<Tone, boolean>
   focusDate: string | null
+  /** phone layout: no chips, each day shows its row count and the day opens in the bottom sheet */
+  compact: boolean
   onSelectGroup: (g: Group) => void
   onSelectDate: (date: string) => void
 }
 
 type TitleArg = { date: { year: number; month: number; day: number } }
 
-export default function CalendarView({ shipments, era, groupBy, toneVisible, focusDate, onSelectGroup, onSelectDate }: Props) {
+export default function CalendarView({ shipments, era, groupBy, toneVisible, focusDate, compact, onSelectGroup, onSelectDate }: Props) {
   const ref = useRef<FullCalendar>(null)
   const host = useRef<HTMLDivElement>(null)
   const groups = useMemo(() => buildGroups(shipments, groupBy), [shipments, groupBy])
   const byId = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups])
+  // per-day totals for the compact layout; the badge takes the most urgent tone of the day
+  const perDay = useMemo(() => {
+    const rank: Record<Tone, number> = { pending: 2, unassigned: 1, assigned: 0 }
+    const m = new Map<string, { n: number; tone: Tone }>()
+    for (const g of groups) {
+      const cur = m.get(g.date)
+      m.set(g.date, { n: (cur?.n ?? 0) + g.rows.length, tone: !cur || rank[g.tone] > rank[cur.tone] ? g.tone : cur.tone })
+    }
+    return m
+  }, [groups])
   const events = useMemo(
     () =>
-      groups.map((g) => ({
+      (compact ? [] : groups).map((g) => ({
         id: g.id,
         title: `${groupBy === 'customer' ? shortName(g.label) : g.label} (${g.rows.length})`,
         extendedProps: { full: `${g.label} · ${g.rows.length} รายการ` },
@@ -37,7 +49,7 @@ export default function CalendarView({ shipments, era, groupBy, toneVisible, foc
         allDay: true,
         classNames: [`tone-${toneVisible[g.tone] ? g.tone : 'none'}`],
       })),
-    [groups, toneVisible, groupBy],
+    [groups, toneVisible, groupBy, compact],
   )
 
   useEffect(() => {
@@ -57,7 +69,7 @@ export default function CalendarView({ shipments, era, groupBy, toneVisible, foc
   const title = ({ date }: TitleArg) => fmtDate(dayjs(new Date(date.year, date.month, date.day)).format('YYYY-MM-DD'), era, 'MMMM YYYY')
 
   return (
-    <div className="fc-host" ref={host}>
+    <div className={compact ? 'fc-host compact' : 'fc-host'} ref={host}>
     <FullCalendar
       ref={ref}
       plugins={[dayGridPlugin, listPlugin, interactionPlugin]}
@@ -68,6 +80,19 @@ export default function CalendarView({ shipments, era, groupBy, toneVisible, foc
       titleFormat={title as never}
       events={events}
       dayMaxEvents={4}
+      dayCellContent={
+        compact
+          ? (arg) => {
+              const d = perDay.get(dayjs(arg.date).format('YYYY-MM-DD'))
+              return (
+                <>
+                  <span>{arg.dayNumberText}</span>
+                  {d && <span className={`day-count tone-${toneVisible[d.tone] ? d.tone : 'none'}`}>{d.n}</span>}
+                </>
+              )
+            }
+          : undefined
+      }
       height="100%"
       eventDidMount={(info) => {
         // full name on hover; the chip itself is truncated in narrow cells
