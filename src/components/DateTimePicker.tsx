@@ -4,7 +4,7 @@ import { DayPicker } from 'react-day-picker'
 import { th } from 'react-day-picker/locale'
 import 'react-day-picker/style.css'
 import { fmtDate } from '../lib/format'
-import { localDate } from '../lib/reminders'
+import { localDate, localDateTime, localTime } from '../lib/reminders'
 import type { Era } from '../types'
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -57,6 +57,9 @@ export function TimePicker({ value, onChange, label }: { value: string; onChange
       <Popover.Portal>
         <Popover.Content align="start" sideOffset={4} collisionPadding={8} className={content}>
           <TimeColumns time={value} onChange={onChange} />
+          <button className="mt-2 w-full" onClick={() => onChange(localTime(new Date()))}>
+            ตอนนี้
+          </button>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
@@ -78,7 +81,10 @@ export function DateTimePicker({ value, onChange, era, label }: DTProps) {
       open={open}
       onOpenChange={(o) => {
         setOpen(o)
-        if (o) setMonth(selected ?? new Date())
+        if (!o) return
+        // nothing chosen yet: start from the current date and time
+        if (!value) onChange(localDateTime(new Date()))
+        setMonth(selected ?? new Date())
       }}
     >
       <Popover.Trigger aria-label={label} className="min-w-44 text-left">
@@ -111,9 +117,19 @@ export function DateTimePicker({ value, onChange, era, label }: DTProps) {
           </div>
           <div className="mt-2 flex items-end justify-between gap-3 border-t border-line pt-2">
             <TimeColumns time={time} onChange={(t) => onChange(join(date || localDate(new Date()), t))} />
-            <button className="primary" onClick={() => setOpen(false)}>
-              ตกลง
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  onChange(localDateTime(new Date()))
+                  setMonth(new Date())
+                }}
+              >
+                ตอนนี้
+              </button>
+              <button className="primary" onClick={() => setOpen(false)}>
+                ตกลง
+              </button>
+            </div>
           </div>
         </Popover.Content>
       </Popover.Portal>

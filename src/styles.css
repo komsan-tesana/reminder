@@ -53,7 +53,7 @@
 }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
-body { background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, 'Sarabun', sans-serif; }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 'IBM Plex Sans Thai', system-ui, 'Sarabun', sans-serif; }
 h1, h2, h3 { margin: 0; }
 h1 { font-size: 18px; }
 h2 { font-size: 16px; }
@@ -62,6 +62,7 @@ h3 { font-size: 14px; margin: 14px 0 6px; }
 .small { font-size: 12px; }
 .warn { color: var(--warn); }
 .num { text-align: right; white-space: nowrap; }
+table, .fc { font-variant-numeric: tabular-nums; } /* digits line up in columns and calendar cells */
 
 button, select, input { font: inherit; color: inherit; }
 button { border: 1px solid var(--line); background: var(--card); padding: 6px 12px; border-radius: 6px; cursor: pointer; }
