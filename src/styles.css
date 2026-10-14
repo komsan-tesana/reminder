@@ -289,3 +289,12 @@ main.sheet-open { padding-bottom: calc(34dvh + env(safe-area-inset-bottom)); }
   /* the page scrolls on a phone, so the calendar keeps a usable height even when the sheet's padding is added */
   .cal { min-height: 560px; }
 }
+
+/* month counts: everything stays inside its own day cell */
+.fc-host.compact .fc-daygrid-day-frame { overflow: hidden; }
+.fc-host.compact .fc-daygrid-day-top { max-width: 100%; }
+.fc-host.compact .day-count { display: block; margin: 2px 0 0 4px; width: fit-content; max-width: calc(100% - 8px); overflow: hidden; text-overflow: clip; }
+.fc-host.compact .fc-daygrid-day-number { display: flex; flex-direction: column; align-items: flex-start; padding: 3px 4px; }
+.list-detail { white-space: normal; padding: 2px 0; }
+.list-detail .list-row { font-size: 12px; opacity: 0.85; overflow-wrap: anywhere; }
+.fc .fc-list-event-title { white-space: normal; }
