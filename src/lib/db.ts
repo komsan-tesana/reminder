@@ -12,10 +12,13 @@ import type { Tone } from './group'
 class AppDB extends Dexie {
   shipments!: Table<Shipment, string>
   reminders!: Table<Reminder, string>
+  /** ids of rows the user deleted, so re-importing the same ERP file does not bring them back */
+  deleted!: Table<{ id: string }, string>
   constructor() {
     super('reminder')
     this.version(1).stores({ shipments: 'id,date,so,customerCode' })
     this.version(2).stores({ shipments: 'id,date,so,customerCode', reminders: 'id,at' })
+    this.version(3).stores({ shipments: 'id,date,so,customerCode', reminders: 'id,at', deleted: 'id' })
   }
 }
 export const db = new AppDB()
@@ -110,26 +113,31 @@ export function saveMapping(headers: string[], mapping: Mapping) {
  * Merge keeps rows the user edited in the app (their ids match even if the date was moved),
  * everything else is overwritten by the file. Replace wipes the table first.
  */
-export async function commitImport(items: Shipment[], mode: 'merge' | 'replace'): Promise<{ kept: number }> {
+export async function commitImport(items: Shipment[], mode: 'merge' | 'replace'): Promise<{ kept: number; removed: number }> {
   let kept = 0
-  await db.transaction('rw', db.shipments, async () => {
+  let removed = 0
+  await db.transaction('rw', db.shipments, db.deleted, async () => {
     if (mode === 'replace') {
       await db.shipments.clear()
+      await db.deleted.clear()
       await db.shipments.bulkPut(items)
       return
     }
-    const existing = await db.shipments.bulkGet(items.map((i) => i.id))
-    const toWrite = items.filter((_, i) => !existing[i]?.editedAt)
-    kept = items.length - toWrite.length
+    const ids = items.map((i) => i.id)
+    const [existing, gone] = await Promise.all([db.shipments.bulkGet(ids), db.deleted.bulkGet(ids)])
+    removed = gone.filter(Boolean).length
+    const toWrite = items.filter((_, i) => !gone[i] && !existing[i]?.editedAt)
+    kept = items.filter((_, i) => !gone[i] && existing[i]?.editedAt).length
     await db.shipments.bulkPut(toWrite)
   })
-  return { kept }
+  return { kept, removed }
 }
 
 export async function restoreBackup(data: { shipments: Shipment[]; reminders: Reminder[] }, mode: 'merge' | 'replace') {
-  await db.transaction('rw', db.shipments, db.reminders, async () => {
+  await db.transaction('rw', db.shipments, db.reminders, db.deleted, async () => {
     if (mode === 'replace') {
       await db.shipments.clear()
+      await db.deleted.clear()
       await db.reminders.clear()
     }
     await db.shipments.bulkPut(data.shipments)
@@ -148,4 +156,13 @@ export async function editShipments(ids: string[], patch: Partial<Shipment>): Pr
   }))
   await db.shipments.bulkPut(updated)
   return updated
+}
+
+/** Delete rows for good. Their ids are remembered so a merge import skips them; replace import or a
+ * replace-restore forgets them. */
+export async function deleteShipments(ids: string[]): Promise<void> {
+  await db.transaction('rw', db.shipments, db.deleted, async () => {
+    await db.shipments.bulkDelete(ids)
+    await db.deleted.bulkPut(ids.map((id) => ({ id })))
+  })
 }

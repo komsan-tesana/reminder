@@ -14,11 +14,12 @@ type Props = {
   available: Available
   onShowWholeDay: () => void
   onEdit: (rows: Shipment[]) => void
+  onDelete: (rows: Shipment[]) => void
   onRemind: (rows: Shipment[], date: string) => void
   onClose: () => void
 }
 
-export default function DetailPanel({ date, groupKeyFilter, shipments, era, groupBy, available: av, onShowWholeDay, onEdit, onRemind, onClose }: Props) {
+export default function DetailPanel({ date, groupKeyFilter, shipments, era, groupBy, available: av, onShowWholeDay, onEdit, onDelete, onRemind, onClose }: Props) {
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
@@ -44,6 +45,10 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
     })
   const toggleAll = () => setSelected(allChosen ? new Set() : new Set(rows.map((r) => r.id)))
   const target = chosen.length ? chosen : rows
+  const confirmDelete = () => {
+    // deleting everything shown without selecting anything is easy to do by accident, so say how many
+    if (window.confirm(`ลบ ${target.length} รายการ? การลบถูกจำไว้ นำเข้าไฟล์เดิมซ้ำก็ไม่กลับมา (ยกเว้นเลือกแทนที่ทั้งหมด)`)) onDelete(target)
+  }
 
   return (
     <aside className="panel" aria-label="รายละเอียดรายการ">
@@ -69,6 +74,9 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
         </button>
         <button disabled={rows.length === 0} onClick={() => onRemind(target, date)}>
           ตั้งเตือน
+        </button>
+        <button className="danger" disabled={rows.length === 0} onClick={confirmDelete}>
+          ลบ ({target.length})
         </button>
         <span className="muted small">{chosen.length ? `เลือก ${chosen.length}` : 'ไม่ได้เลือก = ทั้งหมดที่แสดง'}</span>
       </div>
