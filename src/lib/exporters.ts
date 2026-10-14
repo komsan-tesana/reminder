@@ -97,6 +97,8 @@ const nextDay = (iso: string) => {
 
 /** One all-day event per group, with alarms at 09:00 the day before and 08:00 the same day. */
 export function toICS(groups: Group[], now: Date = new Date(), reminders: Reminder[] = []): string {
+  // calendars treat a re-imported UID with a higher SEQUENCE as an update to the existing event
+  const seq = Math.floor(now.getTime() / 60000)
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Transport Calendar//TH', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Transport Calendar']
   const sorted = [...groups].sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label))
   for (const g of sorted) {
@@ -110,6 +112,8 @@ export function toICS(groups: Group[], now: Date = new Date(), reminders: Remind
       'BEGIN:VEVENT',
       `UID:${uid}`,
       `DTSTAMP:${stamp(now)}`,
+      `LAST-MODIFIED:${stamp(now)}`,
+      `SEQUENCE:${seq}`,
       `DTSTART;VALUE=DATE:${compact(g.date)}`,
       `DTEND;VALUE=DATE:${compact(nextDay(g.date))}`,
       `SUMMARY:${icsEscape(`${g.label} (${g.rows.length})`)}`,
@@ -142,6 +146,8 @@ export function toICS(groups: Group[], now: Date = new Date(), reminders: Remind
       'BEGIN:VEVENT',
       `UID:reminder-${r.id.replace(/[^\w-]/g, '_')}@transport-calendar`,
       `DTSTAMP:${stamp(now)}`,
+      `LAST-MODIFIED:${stamp(now)}`,
+      `SEQUENCE:${seq}`,
       `DTSTART:${compact(d)}T${t.replace(':', '')}00`,
       `DTEND:${endStr}`,
       `SUMMARY:${icsEscape(`🔔 ${r.title}`)}`,

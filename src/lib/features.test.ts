@@ -209,3 +209,17 @@ describe('calendar export and platform', () => {
     expect(notifyState({ ...base, platform: 'desktop', standalone: false, hasNotification: true, permission: 'granted' })).toBe('granted')
   })
 })
+
+describe('ics updates', () => {
+  it('stamps events with SEQUENCE/LAST-MODIFIED that grow over time so re-imports update', () => {
+    const g = buildGroups([make({ id: '1' })], 'customer')
+    const early = toICS(g, new Date('2026-10-14T00:00:00Z'))
+    const late = toICS(g, new Date('2026-10-14T00:05:00Z'))
+    const seq = (s: string) => Number(s.match(/SEQUENCE:(\d+)/)![1])
+    expect(seq(late)).toBeGreaterThan(seq(early))
+    expect(early).toContain('LAST-MODIFIED:20261014T000000Z')
+    // same UID both times, so the calendar treats it as the same event
+    const uid = (s: string) => s.match(/UID:(.*)\r\n/)![1]
+    expect(uid(early)).toBe(uid(late))
+  })
+})
