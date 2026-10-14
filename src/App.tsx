@@ -13,7 +13,7 @@ import { dailyDigest, dueReminders, localDate } from './lib/reminders'
 import { fmtDate } from './lib/format'
 import { playChime } from './lib/sound'
 import { applyTheme, THEME_LABEL } from './lib/theme'
-import { download } from './lib/download'
+import { syncToDeviceCalendar } from './lib/calendarSync'
 import { toICS } from './lib/exporters'
 import { buildGroups } from './lib/group'
 import { makeSample } from './lib/sample'
@@ -223,12 +223,20 @@ export default function App() {
   }
 
   /** Upcoming work plus pending reminders as an .ics the phone's Calendar app will alert from. */
-  function exportCalendar() {
+  async function exportCalendar() {
     const today = localDate(new Date())
     const upcoming = shipments.filter((s) => s.date >= today)
     const ics = toICS(buildGroups(upcoming, groupBy), new Date(), reminders)
-    download(new Blob([ics], { type: 'text/calendar;charset=utf-8' }), `transport-${today.replace(/-/g, '')}.ics`)
-    push({ title: 'ส่งออกปฏิทินแล้ว', body: `${upcoming.length} รายการ + เตือน ${reminders.filter((r) => !r.done).length} รายการ เปิดไฟล์เพื่อเพิ่มลงปฏิทินเครื่อง` })
+    const result = await syncToDeviceCalendar(ics, `transport-${today.replace(/-/g, '')}.ics`)
+    if (result === 'cancelled') return
+    const n = reminders.filter((r) => !r.done).length
+    push({
+      title: 'ซิงก์ปฏิทิน',
+      body:
+        result === 'shared'
+          ? `ส่ง ${upcoming.length} รายการ + เตือน ${n} รายการ ไปที่หน้าต่างแชร์แล้ว เลือก “ปฏิทิน” แล้วยืนยัน`
+          : `ดาวน์โหลดไฟล์ปฏิทินแล้ว (${upcoming.length} รายการ + เตือน ${n}) เปิดไฟล์เพื่อเพิ่มลงปฏิทิน`,
+    })
   }
 
   function remindFor(rows: Shipment[], date: string) {
