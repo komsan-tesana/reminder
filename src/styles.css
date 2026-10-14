@@ -272,3 +272,5 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .fc .fc-list-empty { background: transparent; }
 @media (max-width: 820px) { .fc .fc-toolbar.fc-header-toolbar { justify-content: center; } }
 .fc th { background: transparent; position: static; }
+button.danger { color: var(--warn); border-color: var(--warn); }
+button.danger:hover:not(:disabled) { background: var(--warn); color: var(--bg); }

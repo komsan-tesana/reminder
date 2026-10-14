@@ -8,7 +8,7 @@ import { fmtDate } from '../lib/format'
 
 type Props = {
   onClose: () => void
-  onImported: (items: Shipment[], kept: number) => void
+  onImported: (items: Shipment[], kept: number, removed: number) => void
 }
 
 export default function ImportWizard({ onClose, onImported }: Props) {
@@ -60,8 +60,8 @@ export default function ImportWizard({ onClose, onImported }: Props) {
     setBusy(true)
     try {
       saveMapping(sheet.headers, mapping)
-      const { kept } = await commitImport(result.items, mode)
-      onImported(result.items, kept)
+      const { kept, removed } = await commitImport(result.items, mode)
+      onImported(result.items, kept, removed)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setBusy(false)

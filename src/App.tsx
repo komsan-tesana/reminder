@@ -5,7 +5,7 @@ import FilterBar from './components/FilterBar'
 import ResizeHandle, { EDGE_W, MAX_VH, type PanelSize } from './components/ResizeHandle'
 import Toasts, { type Toast } from './components/Toasts'
 import type { ReminderDraft } from './components/ReminderModal'
-import { db, editShipments, loadPanelSize, loadSettings, restoreBackup, savePanelSize, saveSettings, type Settings } from './lib/db'
+import { db, deleteShipments, editShipments, loadPanelSize, loadSettings, restoreBackup, savePanelSize, saveSettings, type Settings } from './lib/db'
 import { availableFields, effectiveGroupBy, groupOptions } from './lib/available'
 import { applyFilters, NO_FILTERS } from './lib/filters'
 import type { Group, Tone } from './lib/group'
@@ -229,12 +229,13 @@ export default function App() {
   const isDark = settings.theme === 'dark' || (settings.theme === 'system' && osDark)
   const updateNotify = (notify: NotifySettings) => update({ notify })
 
-  async function afterImport(items: Shipment[], kept: number) {
+  async function afterImport(items: Shipment[], kept: number, removed: number) {
     setShipments(await db.shipments.toArray())
     setFocusDate(nearestDate(items))
     setSelection(null)
     setDialog(null)
-    if (kept > 0) push({ title: 'นำเข้าเสร็จ', body: `ข้าม ${kept} รายการที่คุณแก้ไขไว้ในแอป (ไม่ถูกทับ)` })
+    const notes = [kept > 0 && `ข้าม ${kept} รายการที่คุณแก้ไขไว้ในแอป (ไม่ถูกทับ)`, removed > 0 && `ข้าม ${removed} รายการที่คุณลบไว้ (ไม่ถูกนำกลับมา)`].filter(Boolean)
+    if (notes.length) push({ title: 'นำเข้าเสร็จ', body: notes.join('\n') })
   }
 
   async function saveEdit(patch: Partial<Shipment>) {
@@ -245,6 +246,15 @@ export default function App() {
     // follow the rows if the date moved
     if (patch.date && selection) setFocusDate(patch.date)
     setEditing(null)
+  }
+
+  async function removeRows(rows: Shipment[]) {
+    const ids = new Set(rows.map((r) => r.id))
+    await deleteShipments([...ids])
+    setShipments((all) => all.filter((s) => !ids.has(s.id)))
+    // close the panel when its day has nothing left
+    if (selection && !shipments.some((s) => s.date === selection.date && !ids.has(s.id))) setSelection(null)
+    push({ title: 'ลบแล้ว', body: `ลบ ${ids.size} รายการ` })
   }
 
   async function restore(data: { shipments: Shipment[]; reminders: Reminder[] }, mode: 'merge' | 'replace') {
@@ -478,6 +488,7 @@ export default function App() {
             available={available}
             onShowWholeDay={() => setSelection({ date: selection.date, key: null })}
             onEdit={setEditing}
+            onDelete={removeRows}
             onRemind={remindFor}
             onClose={() => setSelection(null)}
           />
