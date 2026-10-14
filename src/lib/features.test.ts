@@ -180,3 +180,32 @@ describe('tone colours', () => {
     expect(migrateToneColor('assigned', '#123456')).toBe('#123456')
   })
 })
+
+describe('calendar export and platform', () => {
+  it('adds pending reminders as timed events with an alert at the start', () => {
+    const now = new Date(2026, 9, 14, 9, 0)
+    const rems = [
+      { id: 'a', title: 'โทรยืนยัน', at: '2026-10-15T08:00', done: false },
+      { id: 'b', title: 'เสร็จแล้ว', at: '2026-10-16T08:00', done: true },
+      { id: 'c', title: 'ผ่านไปแล้ว', at: '2026-10-13T08:00', done: false },
+    ]
+    const ics = toICS([], now, rems)
+    expect(ics).toContain('DTSTART:20261015T080000')
+    expect(ics).toContain('DTEND:20261015T083000')
+    expect(ics).toContain('TRIGGER:PT0S')
+    expect(ics).not.toContain('เสร็จแล้ว')
+    expect(ics).not.toContain('ผ่านไปแล้ว')
+  })
+  it('detects iOS (including iPadOS) and gates notifications on Home Screen install', async () => {
+    const { detectPlatform, notifyState } = await import('./platform')
+    expect(detectPlatform('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)')).toBe('ios')
+    expect(detectPlatform('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 5)).toBe('ios')
+    expect(detectPlatform('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 0)).toBe('desktop')
+    expect(detectPlatform('Mozilla/5.0 (Linux; Android 14)')).toBe('android')
+    const base = { hasNotification: false, permission: 'default' as const }
+    expect(notifyState({ ...base, platform: 'ios', standalone: false })).toBe('ios-install')
+    expect(notifyState({ ...base, platform: 'ios', standalone: true, hasNotification: true })).toBe('default')
+    expect(notifyState({ ...base, platform: 'desktop', standalone: false })).toBe('unsupported')
+    expect(notifyState({ ...base, platform: 'desktop', standalone: false, hasNotification: true, permission: 'granted' })).toBe('granted')
+  })
+})

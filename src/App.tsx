@@ -9,10 +9,13 @@ import { db, editShipments, loadPanelSize, loadSettings, restoreBackup, savePane
 import { availableFields, effectiveGroupBy, groupOptions } from './lib/available'
 import { applyFilters, NO_FILTERS } from './lib/filters'
 import type { Group, Tone } from './lib/group'
-import { dailyDigest, dueReminders } from './lib/reminders'
+import { dailyDigest, dueReminders, localDate } from './lib/reminders'
 import { fmtDate } from './lib/format'
 import { playChime } from './lib/sound'
 import { applyTheme, THEME_LABEL } from './lib/theme'
+import { download } from './lib/download'
+import { toICS } from './lib/exporters'
+import { buildGroups } from './lib/group'
 import { makeSample } from './lib/sample'
 import { systemNotify, useReminderEngine } from './lib/useReminderEngine'
 import type { Filters, NotifySettings, Reminder, Shipment } from './types'
@@ -214,9 +217,18 @@ export default function App() {
   function testNotify() {
     const d = dailyDigest(shipments, new Date(), settings.notify)
     const m = d ?? { title: 'ทดสอบการแจ้งเตือน', body: 'ไม่มีงานวันนี้/พรุ่งนี้ นี่คือข้อความทดสอบ' }
-    systemNotify(m)
+    void systemNotify(m)
     push(m)
     if (settings.notify.sound) void playChime()
+  }
+
+  /** Upcoming work plus pending reminders as an .ics the phone's Calendar app will alert from. */
+  function exportCalendar() {
+    const today = localDate(new Date())
+    const upcoming = shipments.filter((s) => s.date >= today)
+    const ics = toICS(buildGroups(upcoming, groupBy), new Date(), reminders)
+    download(new Blob([ics], { type: 'text/calendar;charset=utf-8' }), `transport-${today.replace(/-/g, '')}.ics`)
+    push({ title: 'ส่งออกปฏิทินแล้ว', body: `${upcoming.length} รายการ + เตือน ${reminders.filter((r) => !r.done).length} รายการ เปิดไฟล์เพื่อเพิ่มลงปฏิทินเครื่อง` })
   }
 
   function remindFor(rows: Shipment[], date: string) {
@@ -396,6 +408,7 @@ export default function App() {
             onToggle={toggleReminder}
             onDelete={deleteReminder}
             onTest={testNotify}
+            onExportCalendar={exportCalendar}
             onClose={() => setDialog(null)}
           />
         )}

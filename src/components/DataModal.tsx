@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import Modal from './Modal'
 import { buildGroups } from '../lib/group'
 import { parseBackup, toBackup, toCSV, toICS, toRows, toXlsxBlob, type DateFmt } from '../lib/exporters'
+import { download } from '../lib/download'
 import { localDate } from '../lib/reminders'
 import type { GroupBy, Reminder, Shipment } from '../types'
 
@@ -16,15 +17,6 @@ type Props = {
 }
 
 type Format = 'xlsx' | 'csv' | 'ics' | 'json'
-
-function download(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = name
-  a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
 
 export default function DataModal({ all, filtered, reminders, groupBy, onRestore, onClear, onClose }: Props) {
   const [format, setFormat] = useState<Format>('xlsx')
