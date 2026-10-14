@@ -155,3 +155,28 @@ describe('shortName / sample', () => {
     expect(rows.some((r) => r.date === '2026-10-13')).toBe(true)
   })
 })
+
+describe('theme', () => {
+  it('accepts only known themes', async () => {
+    const { isTheme } = await import('./theme')
+    expect(['system', 'light', 'dark'].every(isTheme)).toBe(true)
+    expect(isTheme('blue')).toBe(false)
+    expect(isTheme(undefined)).toBe(false)
+  })
+})
+
+describe('tone colours', () => {
+  it('defaults give white text at least WCAG AA contrast', async () => {
+    const { DEFAULT_TONES, contrastWithWhite } = await import('./tones')
+    for (const t of Object.values(DEFAULT_TONES)) expect(contrastWithWhite(t.color)).toBeGreaterThanOrEqual(4.5)
+    expect(contrastWithWhite('#ffffff')).toBeCloseTo(1, 1)
+    expect(contrastWithWhite('#000000')).toBeCloseTo(21, 0)
+  })
+  it('moves untouched old defaults to the new ones but keeps real choices', async () => {
+    const { DEFAULT_TONES, migrateToneColor } = await import('./tones')
+    expect(migrateToneColor('assigned', '#16a34a')).toBe(DEFAULT_TONES.assigned.color)
+    expect(migrateToneColor('pending', '#EA580C')).toBe(DEFAULT_TONES.pending.color)
+    expect(migrateToneColor('unassigned', undefined)).toBe(DEFAULT_TONES.unassigned.color)
+    expect(migrateToneColor('assigned', '#123456')).toBe('#123456')
+  })
+})

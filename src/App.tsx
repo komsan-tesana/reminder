@@ -12,6 +12,7 @@ import type { Group, Tone } from './lib/group'
 import { dailyDigest, dueReminders } from './lib/reminders'
 import { fmtDate } from './lib/format'
 import { playChime } from './lib/sound'
+import { applyTheme, THEME_LABEL } from './lib/theme'
 import { makeSample } from './lib/sample'
 import { systemNotify, useReminderEngine } from './lib/useReminderEngine'
 import type { Filters, NotifySettings, Reminder, Shipment } from './types'
@@ -144,7 +145,11 @@ export default function App() {
     const next = { ...settings, ...patch }
     setSettings(next)
     saveSettings(next)
+    if (patch.theme) applyTheme(patch.theme)
   }
+  // what the user actually sees, so the quick toggle flips to the opposite of it
+  const osDark = useMedia('(prefers-color-scheme: dark)')
+  const isDark = settings.theme === 'dark' || (settings.theme === 'system' && osDark)
   const updateNotify = (notify: NotifySettings) => update({ notify })
 
   async function afterImport(items: Shipment[], kept: number) {
@@ -245,6 +250,13 @@ export default function App() {
           นำเข้า Excel
         </button>
         <button onClick={() => setDialog('data')}>ส่งออก / สำรอง</button>
+        <button
+          onClick={() => update({ theme: isDark ? 'light' : 'dark' })}
+          aria-label={isDark ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}
+          title={`ธีม: ${THEME_LABEL[settings.theme]} (กดเพื่อสลับเป็นโหมด${isDark ? 'สว่าง' : 'มืด'})`}
+        >
+          {isDark ? '☀️' : '🌙'}
+        </button>
         <button onClick={() => setDialog('settings')} aria-label="ตั้งค่าการแสดงผล" title="ตั้งค่าการแสดงผล">
           ⚙
         </button>
@@ -390,9 +402,11 @@ export default function App() {
         {dialog === 'settings' && <SettingsModal
             display={display}
             era={settings.era}
+            theme={settings.theme}
             groupBy={groupBy}
             groupChoices={groupChoices.map((g) => ({ value: g, label: GROUP_LABEL[g] }))}
             onEra={(era) => update({ era })}
+            onTheme={(theme) => update({ theme })}
             onGroupBy={(g) => update({ groupBy: g })}
             onChange={(d) => update({ display: d })}
             onClose={() => setDialog(null)}
