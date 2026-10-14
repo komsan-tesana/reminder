@@ -7,12 +7,15 @@ import Select from './components/Select'
 import ResizeHandle, { EDGE_W, MAX_VH, type PanelSize } from './components/ResizeHandle'
 import { toast } from 'sonner'
 import Toasts from './components/Toasts'
+import Buddy from './components/Buddy'
 import type { ReminderDraft } from './components/ReminderModal'
-import { db, deleteShipments, editShipments, loadPanelSize, loadSettings, restoreBackup, savePanelSize, saveSettings, type Settings } from './lib/db'
+import { db, deleteShipments, editShipments, loadBuddyStats, loadPanelSize, loadSettings, saveBuddyStats, restoreBackup, savePanelSize, saveSettings, type Settings } from './lib/db'
 import { availableFields, effectiveGroupBy, groupOptions } from './lib/available'
 import { applyFilters, NO_FILTERS } from './lib/filters'
 import type { Group, Tone } from './lib/group'
-import { dailyDigest, dueReminders } from './lib/reminders'
+import { addDays, dailyDigest, daySummary, dueReminders, localDate } from './lib/reminders'
+import type { BuddyState, WorkCtx } from './lib/buddy'
+import { newlyUnlocked, recordImport, recordPet, recordReminderDone, recordVisit, safeLook, unlockedIds, type BuddyStats } from './lib/buddyUnlocks'
 import { fmtDate } from './lib/format'
 import { playChime } from './lib/sound'
 import { applyTheme, THEME_LABEL } from './lib/theme'
@@ -29,11 +32,12 @@ const ImportWizard = lazy(() => import('./components/ImportWizard'))
 const DataModal = lazy(() => import('./components/DataModal'))
 const ReminderModal = lazy(() => import('./components/ReminderModal'))
 const NotifyModal = lazy(() => import('./components/NotifyModal'))
+const BuddyModal = lazy(() => import('./components/BuddyModal'))
 const EditModal = lazy(() => import('./components/EditModal'))
 const SettingsModal = lazy(() => import('./components/SettingsModal'))
 
 type Selection = { date: string; key: string | null }
-type Dialog = 'import' | 'data' | 'reminders' | 'notify' | 'settings' | null
+type Dialog = 'import' | 'data' | 'reminders' | 'notify' | 'settings' | 'buddy' | null
 
 /** The data date closest to today, so the calendar opens where the action is (not the file's last row). */
 function nearestDate(items: Shipment[]): string | null {
@@ -79,6 +83,8 @@ export default function App() {
   const [bannerOff, setBannerOff] = useState(false)
   const [panelSize, setPanelSize] = useState<PanelSize>(loadPanelSize)
   const stacked = useMedia('(max-width: 820px)')
+  const [stats, setStats] = useState<BuddyStats>(loadBuddyStats)
+  const statsRef = useRef(stats)
   const mainRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
@@ -91,6 +97,28 @@ export default function App() {
   }, [])
 
   const push = useCallback((m: { title: string; body: string }) => void toast(m.title, { description: m.body }), [])
+  /** change the cat's progress and announce anything it just unlocked */
+  const bump = useCallback(
+    (fn: (s: BuddyStats) => BuddyStats) => {
+      const now = new Date()
+      const prev = statsRef.current
+      const next = fn(prev)
+      if (next === prev) return
+      statsRef.current = next
+      setStats(next)
+      saveBuddyStats(next)
+      for (const it of newlyUnlocked(prev, next, now))
+        push({ title: `🎉 เปี๊ยกปลดล็อก: ${it.name}`, body: it.kind === 'move' ? 'เปี๊ยกจะทำท่านี้เองตามอารมณ์ ดูได้ที่ ⚙ ตั้งค่า → ตู้เสื้อผ้าเปี๊ยก' : 'ไปใส่ได้ที่ ⚙ ตั้งค่า → ตู้เสื้อผ้าเปี๊ยก' })
+    },
+    [push],
+  )
+  // count today as a visit now, and again when the app comes back after midnight
+  useEffect(() => {
+    bump((s) => recordVisit(s, new Date()))
+    const on = () => !document.hidden && bump((s) => recordVisit(s, new Date()))
+    document.addEventListener('visibilitychange', on)
+    return () => document.removeEventListener('visibilitychange', on)
+  }, [bump])
 
   const markFired = useCallback(async (ids: string[]) => {
     const now = Date.now()
@@ -231,6 +259,7 @@ export default function App() {
   const updateNotify = (notify: NotifySettings) => update({ notify })
 
   async function afterImport(items: Shipment[], kept: number, removed: number) {
+    bump(recordImport)
     setShipments(await db.shipments.toArray())
     setFocusDate(nearestDate(items))
     setSelection(null)
@@ -251,6 +280,14 @@ export default function App() {
 
   // On a phone the sheet gets a history entry, so the Back button / swipe-back closes it instead of leaving the app
   const sheetOpen = stacked && !!selection
+  // what the cat jokes about; computed here from local data and never leaves the device
+  const look = safeLook(settings.buddy.skin, settings.buddy.outfit, stats, new Date())
+  const moves = useMemo(() => unlockedIds('move', stats, new Date()) as BuddyState[], [stats])
+  const buddyCtx = useMemo<WorkCtx>(() => {
+    const t = localDate(new Date())
+    const today = daySummary(shipments, t)
+    return { today: today.total, unassigned: today.unassigned, tomorrow: daySummary(shipments, addDays(t, 1)).total, pending: countPendingReminders(reminders) }
+  }, [shipments, reminders])
   useEffect(() => {
     if (!sheetOpen) return
     history.pushState({ sheet: 1 }, '')
@@ -330,6 +367,7 @@ export default function App() {
   }
   const toggleReminder = async (r: Reminder) => {
     await db.reminders.update(r.id, { done: !r.done })
+    if (!r.done) bump(recordReminderDone)
     const all = await db.reminders.toArray()
     setReminders(all)
     await releasePushIfIdle(all)
@@ -543,6 +581,21 @@ export default function App() {
       </main>
 
       <Toasts />
+      {settings.buddy.visible && !sheetOpen && (
+        <Buddy
+          sound={settings.buddy.sound}
+          ctx={buddyCtx}
+          pets={stats.pets}
+          skin={look.skin}
+          outfit={look.outfit}
+          moves={moves}
+          onPet={() => bump(recordPet)}
+          onHide={() => {
+            update({ buddy: { ...settings.buddy, visible: false } })
+            push({ title: 'ซ่อนเปี๊ยกแล้ว', body: 'เรียกกลับมาได้ที่ ⚙ ตั้งค่า' })
+          }}
+        />
+      )}
 
       <Suspense fallback={null}>
         {dialog === 'import' && <ImportWizard onClose={() => setDialog(null)} onImported={afterImport} />}
@@ -592,8 +645,14 @@ export default function App() {
             onTheme={(theme) => update({ theme })}
             onGroupBy={(g) => update({ groupBy: g })}
             onChange={(d) => update({ display: d })}
+            buddy={settings.buddy}
+            onBuddy={(buddy) => update({ buddy })}
+            onWardrobe={() => setDialog('buddy')}
             onClose={() => setDialog(null)}
           />}
+        {dialog === 'buddy' && (
+          <BuddyModal stats={stats} skin={look.skin} outfit={look.outfit} onEquip={(patch) => update({ buddy: { ...settings.buddy, ...patch } })} onClose={() => setDialog(null)} />
+        )}
         {editing && <EditModal rows={editing} all={shipments} era={settings.era} onSave={saveEdit} onClose={() => setEditing(null)} />}
       </Suspense>
     </div>
