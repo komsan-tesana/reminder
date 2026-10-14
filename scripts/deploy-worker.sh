@@ -133,7 +133,11 @@ if [ "$NEEDS_UPDATE" = 0 ]; then
 elif [ "$WRITE" = 1 ]; then
   setvalue PUSH_SERVER_URL "$URL"
   setvalue VAPID_PUBLIC_KEY "$PUBKEY"
-  echo "  เขียนค่าลง $CONFIG_FILE แล้ว: คอมมิตไฟล์นี้ แล้ว  npm run deploy  เพื่อปล่อยแอปที่เปิดใช้ Push"
+  echo "  เขียนค่าลง $CONFIG_FILE แล้ว"
+  # the real values change the file's literal types; make sure the app still compiles with them
+  say "ตรวจว่าแอปยัง build ผ่านกับค่าใหม่"
+  npx tsc -b || fail "แอป build ไม่ผ่านหลังเขียน $CONFIG_FILE (ดู error ด้านบน) ค่านี้ยังอยู่ในไฟล์ แก้แล้วค่อย deploy แอป"
+  echo "  คอมมิตไฟล์นี้ แล้ว  npm run deploy  เพื่อปล่อยแอปที่เปิดใช้ Push"
 else
   echo "  ใส่ค่าเหล่านี้ใน $CONFIG_FILE (หรือรันซ้ำพร้อม --write-config ให้เขียนให้):"
   echo "    export const PUSH_SERVER_URL = '$URL'"

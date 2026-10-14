@@ -314,3 +314,13 @@ describe('push plan', () => {
     expect(buildPushPlan([], many, { ...notify, enabled: false }, now).outbox).toHaveLength(200)
   })
 })
+
+describe('push config', () => {
+  it('is configured only when both the Worker URL and the public key are set', async () => {
+    const { isPushConfigured } = await import('./pushConfig')
+    expect(isPushConfigured('', '')).toBe(false)
+    expect(isPushConfigured('https://x.workers.dev', '')).toBe(false)
+    expect(isPushConfigured('', 'BKEY')).toBe(false)
+    expect(isPushConfigured('https://x.workers.dev', 'BKEY')).toBe(true)
+  })
+})

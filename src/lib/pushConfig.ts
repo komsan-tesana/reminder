@@ -8,4 +8,10 @@ export const PUSH_SERVER_URL = 'https://transport-calendar-push.benaza009.worker
 /** printed by `node worker/scripts/gen-vapid.mjs` */
 export const VAPID_PUBLIC_KEY = 'BGh_lyVHr8pblUGEcWIgDBsF_RjhQTtbLVF2-xXgXvzaE67u_MbKWdcjkKw7pHm-jaz3J7X8MsxMSdPp_wT-I-Y'
 
-export const pushConfigured = () => PUSH_SERVER_URL !== '' && VAPID_PUBLIC_KEY !== ''
+/**
+ * Plain `string` parameters on purpose: the constants above are literal types, and TypeScript rejects
+ * comparing a non-empty literal with '' (it did, the moment the real values were filled in).
+ */
+export const isPushConfigured = (url: string, publicKey: string) => url !== '' && publicKey !== ''
+
+export const pushConfigured = () => isPushConfigured(PUSH_SERVER_URL, VAPID_PUBLIC_KEY)
