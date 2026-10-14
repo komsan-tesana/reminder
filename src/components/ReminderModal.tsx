@@ -3,7 +3,7 @@ import Modal from './Modal'
 import { addDays, localDateTime } from '../lib/reminders'
 import { fmtDate } from '../lib/format'
 import type { PushState } from '../lib/push'
-import { describeDelivery } from '../lib/pushStatus'
+import { countPendingReminders, describeDelivery, pushWanted } from '../lib/pushStatus'
 import type { Era, NotifySettings, Reminder } from '../types'
 
 export type ReminderDraft = { title: string; date: string }
@@ -35,7 +35,27 @@ export default function ReminderModal({ era, notify, reminders, draft, onNotify,
     setTitle('')
   }
 
-  const note = describeDelivery(notify.enabled, push.state)
+  // Push is shared by the summary and the reminders, so its status is described once: under the
+  // summary switch when that is on, otherwise under the reminders (only while some are waiting)
+  const pending = countPendingReminders(reminders)
+  const note = describeDelivery(pushWanted(notify.enabled, pending), push.state)
+  const delivery = note && (
+    <>
+      <p className={`muted small ${note.kind === 'warn' ? 'warn' : ''}`} role="status">
+        {note.text}
+      </p>
+      {push.status && (
+        <p className="muted small" role="status">
+          {push.status}
+        </p>
+      )}
+      {push.state === 'on' && (
+        <p className="muted small">
+          ความเป็นส่วนตัว: ส่งไปที่ server เฉพาะที่อยู่ปลายทางของเครื่องนี้กับ “เวลาที่ต้องปลุก” เท่านั้น ไม่มีชื่อลูกค้า เลข SO หรือข้อความแจ้งเตือน ตัวข้อความอยู่ในเครื่องแล้วประกอบเองตอนถูกปลุก
+        </p>
+      )}
+    </>
+  )
   const sorted = [...reminders].sort((a, b) => a.at.localeCompare(b.at))
   const now = localDateTime(new Date())
 
@@ -73,26 +93,16 @@ export default function ReminderModal({ era, notify, reminders, draft, onNotify,
           </label>
           <button onClick={onTest}>ทดสอบ</button>
         </div>
-        {note && (
-          <p className={`muted small ${note.kind === 'warn' ? 'warn' : ''}`} role="status">
-            {note.text}
-          </p>
-        )}
-        {push.status && (
-          <p className="muted small" role="status">
-            {push.status}
-          </p>
-        )}
-        {notify.enabled && push.state === 'on' && (
-          <p className="muted small">
-            ความเป็นส่วนตัว: ส่งไปที่ server เฉพาะที่อยู่ปลายทางของเครื่องนี้กับ “เวลาที่ต้องปลุก” เท่านั้น ไม่มีชื่อลูกค้า เลข SO หรือข้อความแจ้งเตือน ตัวข้อความอยู่ในเครื่องแล้วประกอบเองตอนถูกปลุก · ปุ่ม “ทดสอบ” จะส่งทั้งในแอปและ Push (ล็อกจอแล้วรอ ~2 นาที)
-          </p>
-        )}
+        {notify.enabled && delivery}
+        {notify.enabled && push.state === 'on' && <p className="muted small">ปุ่ม “ทดสอบ” จะส่งทั้งในแอปและ Push (ล็อกจอแล้วรอ ~2 นาที)</p>}
       </div>
 
       <h3>เตือนเฉพาะรายการ</h3>
       <div className="form">
-        <p className="muted small">รายการเตือนจะเด้งแม้ล็อกจอเมื่อเปิด “แจ้งเตือนอัตโนมัติ” ด้านบน (Push) ถ้าปิดสวิตช์ จะเตือนเฉพาะตอนเปิดแอปค้างไว้</p>
+        <p className="muted small">
+          รายการเตือนเด้งแม้ปิดแอปหรือล็อกจอ (Push) ครั้งแรกที่เพิ่มรายการ เบราว์เซอร์จะขออนุญาตแจ้งเตือน
+        </p>
+        {!notify.enabled && delivery}
         <div className="row">
           <label className="grow">
             ข้อความ
