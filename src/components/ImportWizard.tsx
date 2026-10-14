@@ -5,6 +5,7 @@ import { detectEra } from '../lib/dateParse'
 import { readWorkbook } from '../lib/readWorkbook'
 import { commitImport, loadMapping, saveMapping } from '../lib/db'
 import { fmtDate } from '../lib/format'
+import Modal from './Modal'
 
 type Props = {
   onClose: () => void
@@ -84,15 +85,29 @@ export default function ImportWizard({ onClose, onImported }: Props) {
     : null
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label="นำเข้าไฟล์ Excel" onClick={(e) => e.stopPropagation()}>
-        <header>
-          <h2>นำเข้าไฟล์ Excel</h2>
-          <button className="icon" onClick={onClose} aria-label="ปิด">
-            ✕
+    <Modal
+      title="นำเข้าไฟล์ Excel"
+      onClose={onClose}
+      wide
+      footer={
+        <>
+          {sheet && (
+            <button
+              onClick={() => {
+                setSheet(null)
+                setFile(null)
+              }}
+            >
+              เลือกไฟล์ใหม่
+            </button>
+          )}
+          <button onClick={onClose}>ยกเลิก</button>
+          <button className="primary" disabled={busy || !result || result.items.length === 0 || mapping.requestedDate === undefined} onClick={confirm}>
+            {busy ? 'กำลังบันทึก…' : `นำเข้า ${result?.items.length.toLocaleString() ?? ''} รายการ`}
           </button>
-        </header>
-
+        </>
+      }
+    >
         {!sheet && (
           <div
             className="drop"
@@ -211,24 +226,6 @@ export default function ImportWizard({ onClose, onImported }: Props) {
         )}
 
         {error && <p className="warn">{error}</p>}
-
-        <footer>
-          {sheet && (
-            <button
-              onClick={() => {
-                setSheet(null)
-                setFile(null)
-              }}
-            >
-              เลือกไฟล์ใหม่
-            </button>
-          )}
-          <button onClick={onClose}>ยกเลิก</button>
-          <button className="primary" disabled={busy || !result || result.items.length === 0 || mapping.requestedDate === undefined} onClick={confirm}>
-            {busy ? 'กำลังบันทึก…' : `นำเข้า ${result?.items.length.toLocaleString() ?? ''} รายการ`}
-          </button>
-        </footer>
-      </div>
-    </div>
+    </Modal>
   )
 }
