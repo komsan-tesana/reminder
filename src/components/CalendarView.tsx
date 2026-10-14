@@ -55,6 +55,33 @@ export default function CalendarView({ shipments, era, groupBy, toneVisible, foc
     [groups, toneVisible, groupBy, monthCounts],
   )
 
+  // The "+more" popover is positioned by FullCalendar from its cell and can run past the bottom of the
+  // screen; lift it back inside the viewport and let it scroll in whatever room is left (see .fc-popover in styles.css)
+  useEffect(() => {
+    const el = host.current
+    if (!el) return
+    const fit = (pop: HTMLElement) => {
+      const margin = 8
+      let r = pop.getBoundingClientRect()
+      const over = r.bottom - (window.innerHeight - margin)
+      if (over > 0) {
+        const shift = Math.min(over, Math.max(0, r.top - margin))
+        pop.style.top = `${(parseFloat(pop.style.top) || pop.offsetTop) - shift}px`
+        r = pop.getBoundingClientRect()
+      }
+      pop.style.maxHeight = `${Math.max(140, Math.min(r.height, window.innerHeight - r.top - margin))}px`
+    }
+    const mo = new MutationObserver(() => {
+      const pop = el.querySelector<HTMLElement>('.fc-popover')
+      if (pop && !pop.dataset.fitted) {
+        pop.dataset.fitted = '1'
+        fit(pop)
+      }
+    })
+    mo.observe(el, { childList: true, subtree: true })
+    return () => mo.disconnect()
+  }, [])
+
   useEffect(() => {
     const el = host.current
     if (!el) return

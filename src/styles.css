@@ -10,6 +10,7 @@
   --color-muted: var(--muted);
   --color-line: var(--line);
   --color-accent: var(--accent);
+  --color-accent-fill: var(--accent-fill);
 }
 :root {
   --bg: #f3ead9;
@@ -147,10 +148,6 @@ td .clip, td.clip { max-width: 260px; overflow: hidden; text-overflow: ellipsis;
 .form label.row, .row { display: flex; flex-direction: row; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 .form label.row { align-items: center; color: var(--text); font-size: 14px; }
 .grow { flex: 1 1 200px; }
-.rem-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.rem-list li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; }
-.rem-list li.due { border-color: var(--pending); }
-.rem-list li.done .grow { text-decoration: line-through; color: var(--muted); }
 button.danger { border-color: var(--warn); color: var(--warn); }
 tr.sel td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .edited { color: var(--accent); }
@@ -298,3 +295,17 @@ main.sheet-open { padding-bottom: calc(34dvh + env(safe-area-inset-bottom)); }
 .list-detail { white-space: normal; padding: 2px 0; }
 .list-detail .list-row { font-size: 12px; opacity: 0.85; overflow-wrap: anywhere; }
 .fc .fc-list-event-title { white-space: normal; }
+
+/* "+เพิ่มเติม" popover: scroll inside itself instead of running off the screen */
+.fc .fc-popover { max-width: min(340px, calc(100vw - 16px)); max-height: min(60dvh, 420px); display: flex; flex-direction: column; z-index: 30; }
+.fc .fc-popover-body { overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
+.rdp-root { color: var(--text); }
+
+/* sonner toasts: the original card look (card colour, 1px line, accent bar on the left, bold title, ✕ on the right);
+   rules are prefixed with the toaster attribute so they beat sonner's own stylesheet */
+[data-sonner-toaster] { --width: min(360px, calc(100vw - 24px)); font-family: inherit; }
+[data-sonner-toaster] [data-sonner-toast] { background: var(--card); color: var(--text); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 10px 36px 10px 12px; box-shadow: 0 6px 20px rgb(0 0 0 / 0.2); font-size: 14px; }
+[data-sonner-toaster] [data-sonner-toast] [data-title] { font-weight: 700; font-size: 14px; color: var(--text); }
+[data-sonner-toaster] [data-sonner-toast] [data-description] { color: var(--text); font-size: 14px; font-weight: 400; white-space: pre-line; }
+[data-sonner-toaster] [data-sonner-toast] [data-close-button] { left: auto; right: 6px; top: 6px; transform: none; width: auto; height: auto; padding: 4px 8px; border: 0; border-radius: 6px; background: none; color: var(--muted); opacity: 1; }
+[data-sonner-toaster] [data-sonner-toast] [data-close-button]:hover { background: none; color: var(--text); }
