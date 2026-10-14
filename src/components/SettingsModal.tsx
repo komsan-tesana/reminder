@@ -1,7 +1,7 @@
 import Modal from './Modal'
 import Select from './Select'
 import Checkbox from './Checkbox'
-import { DEFAULT_TONES, type BuddySettings, type DisplaySettings } from '../lib/db'
+import { DEFAULT_TONES, type DisplaySettings } from '../lib/db'
 import type { Tone } from '../lib/group'
 import { THEMES, THEME_LABEL } from '../lib/theme'
 import type { Era, GroupBy, Theme } from '../types'
@@ -16,9 +16,6 @@ type Props = {
   onTheme: (t: Theme) => void
   onGroupBy: (g: GroupBy) => void
   onChange: (d: DisplaySettings) => void
-  buddy: BuddySettings
-  onBuddy: (b: BuddySettings) => void
-  onWardrobe: () => void
   onClose: () => void
 }
 
@@ -28,7 +25,7 @@ const TONES: { tone: Tone; label: string; hint: string }[] = [
   { tone: 'unassigned', label: 'ยังไม่จัดรถ', hint: 'ยังไม่มีคนขับ/รถ' },
 ]
 
-export default function SettingsModal({ display, era, theme, groupBy, groupChoices, onEra, onTheme, onGroupBy, onChange, buddy, onBuddy, onWardrobe, onClose }: Props) {
+export default function SettingsModal({ display, era, theme, groupBy, groupChoices, onEra, onTheme, onGroupBy, onChange, onClose }: Props) {
   const setTone = (tone: Tone, patch: Partial<DisplaySettings['tones'][Tone]>) =>
     onChange({ ...display, tones: { ...display.tones, [tone]: { ...display.tones[tone], ...patch } } })
 
@@ -108,22 +105,6 @@ export default function SettingsModal({ display, era, theme, groupBy, groupChoic
           ))}
         </ul>
         <p className="muted small">สถานะที่ปิดไว้จะแสดงเป็นสีกลางเหมือนงานทั่วไป และถูกซ่อนจากคำอธิบายสี ค่าที่ตั้งไว้จะถูกจำในเบราว์เซอร์นี้</p>
-      </div>
-
-      <h3>🐱 เปี๊ยก (แมวประจำแอป)</h3>
-      <div className="form">
-        <label className="row">
-          <Checkbox checked={buddy.visible} onChange={(visible) => onBuddy({ ...buddy, visible })} />
-          แสดงเปี๊ยก (เดินเล่นที่ขอบล่างของจอ กดเพื่อทักทาย)
-        </label>
-        <label className="row">
-          <Checkbox disabled={!buddy.visible} checked={buddy.sound} onChange={(sound) => onBuddy({ ...buddy, sound })} />
-          🔊 เสียงเมี๊ยวตอนกดทัก (ปิดไว้ก่อนเป็นค่าเริ่มต้น)
-        </label>
-        <div>
-          <button onClick={onWardrobe}>👕 ตู้เสื้อผ้า / ของที่ปลดล็อก</button>
-        </div>
-        <p className="muted small">เปี๊ยกพูดถึงงานของวันนี้ตามข้อมูลในเครื่องนี้เท่านั้น ไม่มีอะไรถูกส่งออกไป</p>
       </div>
     </Modal>
   )

@@ -3,9 +3,9 @@
 
 export const BUDDY_NAME = 'เปี๊ยก'
 
-export type BuddyState = 'sit' | 'walk' | 'yawn' | 'sleep' | 'play' | 'happy' | 'stretch' | 'roll' | 'tail' | 'shout'
+export type BuddyState = 'sit' | 'walk' | 'yawn' | 'sleep' | 'play' | 'happy' | 'stretch' | 'roll' | 'tail' | 'groom' | 'zoom' | 'stand' | 'shout'
 /** moves the cat only does once they are unlocked (see buddyUnlocks.ts); `shout` is an easter egg for poking too fast */
-export const LOCKABLE_MOVES = ['stretch', 'roll', 'tail'] as const
+export const LOCKABLE_MOVES = ['stretch', 'roll', 'tail', 'groom', 'zoom', 'stand'] as const
 export type Period = 'latenight' | 'morning' | 'noon' | 'afternoon' | 'evening' | 'night'
 export type Rnd = () => number // like Math.random: [0, 1)
 
@@ -21,12 +21,12 @@ export function periodOf(d: Date): Period {
 
 /** how likely each activity is to come next, per time of day: lively in the morning, drowsy after lunch, asleep at night */
 const WEIGHTS: Record<Period, Record<BuddyState, number>> = {
-  latenight: { sit: 1, walk: 0.3, yawn: 2, sleep: 7, play: 0.2, happy: 0, stretch: 0, roll: 0, tail: 0.1, shout: 0 },
-  morning: { sit: 2, walk: 4, yawn: 1, sleep: 0.3, play: 3, happy: 0, stretch: 1.5, roll: 0.5, tail: 1, shout: 0 },
-  noon: { sit: 3, walk: 3, yawn: 1.5, sleep: 1, play: 1.5, happy: 0, stretch: 0.5, roll: 1, tail: 0.5, shout: 0 },
-  afternoon: { sit: 3, walk: 2, yawn: 3.5, sleep: 3, play: 1, happy: 0, stretch: 1, roll: 1, tail: 0.5, shout: 0 },
-  evening: { sit: 2, walk: 3, yawn: 1, sleep: 1, play: 3.5, happy: 0, stretch: 1, roll: 1.5, tail: 1.5, shout: 0 },
-  night: { sit: 2, walk: 0.8, yawn: 3.5, sleep: 5, play: 0.4, happy: 0, stretch: 0, roll: 0, tail: 0.2, shout: 0 },
+  latenight: { sit: 1, walk: 0.3, yawn: 2, sleep: 7, play: 0.2, happy: 0, stretch: 0, roll: 0, tail: 0.1, groom: 0.3, zoom: 2.5, stand: 0.2, shout: 0 },
+  morning: { sit: 2, walk: 4, yawn: 1, sleep: 0.3, play: 3, happy: 0, stretch: 1.5, roll: 0.5, tail: 1, groom: 0.6, zoom: 0.3, stand: 0.5, shout: 0 },
+  noon: { sit: 3, walk: 3, yawn: 1.5, sleep: 1, play: 1.5, happy: 0, stretch: 0.5, roll: 1, tail: 0.5, groom: 1, zoom: 0.2, stand: 1, shout: 0 },
+  afternoon: { sit: 3, walk: 2, yawn: 3.5, sleep: 3, play: 1, happy: 0, stretch: 1, roll: 1, tail: 0.5, groom: 1.5, zoom: 0.2, stand: 1, shout: 0 },
+  evening: { sit: 2, walk: 3, yawn: 1, sleep: 1, play: 3.5, happy: 0, stretch: 1, roll: 1.5, tail: 1.5, groom: 1, zoom: 1, stand: 1.5, shout: 0 },
+  night: { sit: 2, walk: 0.8, yawn: 3.5, sleep: 5, play: 0.4, happy: 0, stretch: 0, roll: 0, tail: 0.2, groom: 1, zoom: 2, stand: 0.2, shout: 0 },
 }
 
 const SLEEPY: Period[] = ['latenight', 'afternoon', 'night']
@@ -73,6 +73,12 @@ export function durationMs(state: BuddyState, rnd: Rnd): number {
       return between(4500, 6500)
     case 'tail':
       return between(5000, 7000)
+    case 'groom':
+      return between(4500, 6500)
+    case 'zoom':
+      return between(4000, 6000) // the real time is set by the distance it runs
+    case 'stand':
+      return between(5000, 8000)
     case 'shout':
       return 3200
   }
@@ -117,14 +123,16 @@ const LINES: Record<Period, string[]> = {
   ],
 }
 
-export type Season = 'songkran' | 'newyear' | 'krathong'
-/** Songkran 13–15 April, New Year 30 Dec–2 Jan, Loy Krathong falls in November (the exact full-moon date moves, so the whole month counts) */
+export type Season = 'songkran' | 'newyear' | 'krathong' | 'halloween' | 'christmas'
+/** Songkran 13–15 April, New Year 30 Dec–2 Jan, Loy Krathong falls in November (the exact full-moon date moves, so the whole month counts), Halloween 31 Oct, Christmas 24–25 Dec */
 export function seasonOf(d: Date): Season | null {
   const m = d.getMonth() + 1
   const day = d.getDate()
   if (m === 4 && day >= 13 && day <= 15) return 'songkran'
   if ((m === 12 && day >= 30) || (m === 1 && day <= 2)) return 'newyear'
   if (m === 11) return 'krathong'
+  if (m === 10 && day === 31) return 'halloween'
+  if (m === 12 && (day === 24 || day === 25)) return 'christmas'
   return null
 }
 
@@ -132,6 +140,8 @@ const SEASON_LINES: Record<Season, string[]> = {
   songkran: ['สุขสันต์วันสงกรานต์! เปี๊ยกเปียกหมดแล้วเมี๊ยว', 'สาดน้ำได้ แต่อย่าสาดคอมนะ', 'สงกรานต์นี้ขอให้รถไม่ติด คนขับไม่เปียก'],
   newyear: ['สวัสดีปีใหม่! ปีนี้ขอให้ไม่มีรถค้างนะ', 'ปีใหม่แล้ว เปี๊ยกขอปลาทูเป็นของขวัญ', 'นับถอยหลังกันหรือยัง? เปี๊ยกขอหลับก่อนนับ'],
   krathong: ['ลอยกระทงแล้ว… เปี๊ยกขอลอยตัวไปด้วย', 'เดือนพฤศจิกายน ลมหนาวมา แมวขอนอนขดนะ'],
+  halloween: ['ฮาโลวีน! ถ้ามีรถเสียกลางคืน อันนั้นผีหลอกของจริง', 'เปี๊ยกไม่กลัวผีหรอก… แต่ขอนั่งข้างๆ นะ'],
+  christmas: ['คริสต์มาสแล้ว เปี๊ยกขอปลาทูเป็นของขวัญ', 'ซานต้ายังต้องจัดรถส่งของเลย เหมือนเราเนี่ยแหละ'],
 }
 const WEEKDAY_LINES: Record<number, string[]> = {
   1: ['วันจันทร์… ฮ้าว แต่เปี๊ยกเชียร์อยู่นะ'],
@@ -181,16 +191,18 @@ const POKED = ['เมี๊ยว! สวัสดี~', 'ทักเปี๊
 const SHOUTS = ['อ๊ากกก อย่าจิ้มรัวๆ! เปี๊ยกตกใจ', 'ฮือออ จิ้มแรงไป! เปี๊ยกจะร้องแล้วนะ', 'ไม่ไหวแล้วเมี๊ยววว!']
 const WOKEN = ['ซู่… อย่าเพิ่งปลุก ขออีกห้านาที', 'ฮึ่ม ปลุกทำไมเนี่ย (ง่วง)', 'อะไรเนี่ย… กำลังฝันถึงปลาทู']
 const MILESTONES: Record<number, string> = {
-  10: 'ทักครบ 10 ครั้งแล้ว! เปี๊ยกนับเธอเป็นทาสแมวแล้วนะ',
-  50: '50 ครั้ง! เธอคือทาสแมวตัวจริง',
-  100: '100 ครั้งเลยเหรอ… เปี๊ยกซึ้งใจ ขอนอนตักได้ไหม',
+  1000: 'ทักครบ 1,000 ครั้งแล้ว! เปี๊ยกนับเธอเป็นทาสแมวแล้วนะ',
+  5000: '5,000 ครั้ง! เธอคือทาสแมวตัวจริง',
+  10000: '10,000 ครั้งเลยเหรอ… เปี๊ยกซึ้งใจ ขอนอนตักได้ไหม',
 }
+const CAPPED = ['วันนี้ทักครบ 200 ครั้งแล้วนะ พรุ่งนี้ค่อยมานับต่อ (เปี๊ยกยังรักเธออยู่)', 'ทักเก่งจัง แต่วันนี้นับครบแล้ว เปี๊ยกขอพักหน่อย']
 
 /** what happens when the cat is poked: what it says and what it does next (`pets` includes this poke) */
-export function clickReply(state: BuddyState, period: Period, ctx: WorkCtx, pets: number, rnd: Rnd, flurry = false): { line: string; next: BuddyState } {
+export function clickReply(state: BuddyState, period: Period, ctx: WorkCtx, pets: number, rnd: Rnd, flurry = false, counted = true, capped = false): { line: string; next: BuddyState } {
   if (flurry) return { line: choose(SHOUTS, rnd), next: 'shout' }
-  if (MILESTONES[pets]) return { line: MILESTONES[pets], next: 'happy' }
+  if (counted && MILESTONES[pets]) return { line: MILESTONES[pets], next: 'happy' }
   if (state === 'sleep') return { line: choose(WOKEN, rnd), next: 'yawn' }
+  if (capped && rnd() < 0.3) return { line: choose(CAPPED, rnd), next: 'happy' }
   const work = workLines(ctx)
   const line = work.length > 0 && rnd() < 0.35 ? choose(work, rnd) : choose(POKED, rnd)
   void period

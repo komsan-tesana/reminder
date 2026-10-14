@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BUDDY_NAME, clickReply, durationMs, isFlurry, nextState, periodOf, pickLine, type BuddyState, type WorkCtx } from '../lib/buddy'
-import type { Outfit, Pose, Skin } from '../lib/buddySprite'
+import type { Outfit, Pose, Skin, Toy } from '../lib/buddySprite'
 import PixelCat from './PixelCat'
 import { playMeow } from '../lib/sound'
 
@@ -9,6 +9,7 @@ const SCALE = 3
 /** the box every pose is centred in, so switching pose never makes the cat jump */
 const BOX = 28 * SCALE
 const SPEED = 46 // px per second while walking
+const ZOOM_SPEED = 170 // ...and when it has the zoomies
 
 const poseOf = (s: BuddyState, frame: 0 | 1): Pose => {
   switch (s) {
@@ -18,6 +19,10 @@ const poseOf = (s: BuddyState, frame: 0 | 1): Pose => {
       return frame ? 'playB' : 'playA'
     case 'tail':
       return frame ? 'tailB' : 'tailA'
+    case 'groom':
+      return frame ? 'groomB' : 'groomA'
+    case 'zoom':
+      return frame ? 'zoomB' : 'zoomA'
     case 'sit':
       return 'sit'
     default:
@@ -32,16 +37,20 @@ type Props = {
   ctx: WorkCtx
   /** pokes so far (before this one) */
   pets: number
+  /** today's counted pokes are used up: it still answers, it just does not count */
+  capped: boolean
   /** what it wears and the unlocked moves it may start doing on its own */
   skin: Skin
   outfit: Outfit
+  toy: Toy
   moves: BuddyState[]
-  onPet: () => void
+  /** `woke`: it was asleep; `flurry`: it was poked too fast and got scared (that one is not counted) */
+  onPet: (info: { woke: boolean; flurry: boolean }) => void
   onHide: () => void
 }
 
 /** เปี๊ยก: a quiet pixel cat that wanders along the bottom edge, naps, yawns and answers when poked. */
-export default function Buddy({ sound, ctx, pets, skin, outfit, moves, onPet, onHide }: Props) {
+export default function Buddy({ sound, ctx, pets, capped, skin, outfit, toy, moves, onPet, onHide }: Props) {
   const reduced = useMemo(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
   const [state, setState] = useState<BuddyState>('sit')
   const [frame, setFrame] = useState<0 | 1>(0)
@@ -74,17 +83,17 @@ export default function Buddy({ sound, ctx, pets, skin, outfit, moves, onPet, on
   /** start an activity and schedule the one after it */
   const go = useCallback(
     (want: BuddyState) => {
-      const next = reduced && (want === 'walk' || want === 'play' || want === 'tail') ? 'sit' : want
+      const next = reduced && (want === 'walk' || want === 'play' || want === 'tail' || want === 'groom' || want === 'zoom') ? 'sit' : want
       stateRef.current = next
       setState(next)
       let ms = durationMs(next, Math.random)
-      if (next === 'walk') {
+      if (next === 'walk' || next === 'zoom') {
         const max = Math.max(8, window.innerWidth - BOX - 8)
         const from = left()
         let target = 8 + Math.random() * (max - 8)
         // always a visible stroll, not a shuffle
         if (Math.abs(target - from) < 90) target = from < max / 2 ? Math.min(max, from + 180) : Math.max(8, from - 180)
-        ms = (Math.abs(target - from) / SPEED) * 1000
+        ms = (Math.abs(target - from) / (next === 'zoom' ? ZOOM_SPEED : SPEED)) * 1000
         setDir(target >= from ? 1 : -1)
         setMoveMs(ms)
         setX(target)
@@ -106,8 +115,9 @@ export default function Buddy({ sound, ctx, pets, skin, outfit, moves, onPet, on
 
   // two-frame animations (walking legs, playing paws)
   useEffect(() => {
-    if (state !== 'walk' && state !== 'play' && state !== 'tail') return
-    const id = window.setInterval(() => setFrame((f) => (f ? 0 : 1)), state === 'walk' ? 240 : state === 'tail' ? 300 : 380)
+    if (state !== 'walk' && state !== 'play' && state !== 'tail' && state !== 'groom' && state !== 'zoom') return
+    const ms = { walk: 240, tail: 300, groom: 360, zoom: 130, play: 380 }[state]
+    const id = window.setInterval(() => setFrame((f) => (f ? 0 : 1)), ms)
     return () => window.clearInterval(id)
   }, [state])
 
@@ -145,10 +155,12 @@ export default function Buddy({ sound, ctx, pets, skin, outfit, moves, onPet, on
   }, [])
 
   function poke() {
-    onPet()
     const now = Date.now()
     pokes.current = [...pokes.current.filter((t) => now - t <= 3000), now]
-    const r = clickReply(stateRef.current, periodOf(new Date()), ctxRef.current, pets + 1, Math.random, isFlurry(pokes.current, now))
+    const flurry = isFlurry(pokes.current, now)
+    const counted = !flurry && !capped
+    onPet({ woke: stateRef.current === 'sleep', flurry })
+    const r = clickReply(stateRef.current, periodOf(new Date()), ctxRef.current, pets + (counted ? 1 : 0), Math.random, flurry, counted, capped)
     // stop where it stands instead of finishing the walk
     setMoveMs(0)
     setX(left())
@@ -170,8 +182,8 @@ export default function Buddy({ sound, ctx, pets, skin, outfit, moves, onPet, on
         </div>
       )}
       <button className={`buddy-btn buddy-${state}`} onClick={poke} aria-label={`${BUDDY_NAME} แมวประจำแอป กดเพื่อทักทาย`}>
-        <span style={{ display: 'inline-block', transform: state === 'walk' && dir < 0 ? 'scaleX(-1)' : undefined }}>
-          <PixelCat pose={poseOf(state, frame)} outfit={outfit} skin={skin} scale={SCALE} />
+        <span style={{ display: 'inline-block', transform: (state === 'walk' || state === 'zoom') && dir < 0 ? 'scaleX(-1)' : undefined }}>
+          <PixelCat pose={poseOf(state, frame)} outfit={outfit} toy={toy} skin={skin} scale={SCALE} />
         </span>
         {state === 'sleep' && <span className="buddy-fx buddy-z" aria-hidden>z Z</span>}
         {(state === 'happy' || state === 'roll') && <span className="buddy-fx buddy-heart" aria-hidden>♥</span>}

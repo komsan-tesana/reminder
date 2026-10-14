@@ -13,13 +13,15 @@ type Props = {
   reminders: Reminder[]
   groupBy: GroupBy
   onRestore: (data: { shipments: Shipment[]; reminders: Reminder[] }, mode: 'merge' | 'replace') => Promise<void>
+  /** a file was exported (the cat counts exports and backups) */
+  onExported: (format: string) => void
   onClear: () => void
   onClose: () => void
 }
 
 type Format = 'xlsx' | 'csv' | 'ics' | 'json'
 
-export default function DataModal({ all, filtered, reminders, groupBy, onRestore, onClear, onClose }: Props) {
+export default function DataModal({ all, filtered, reminders, groupBy, onRestore, onExported, onClear, onClose }: Props) {
   const [format, setFormat] = useState<Format>('xlsx')
   const [scope, setScope] = useState<'filtered' | 'all'>('filtered')
   const [dateFmt, setDateFmt] = useState<DateFmt>('CE')
@@ -39,6 +41,7 @@ export default function DataModal({ all, filtered, reminders, groupBy, onRestore
       else if (format === 'csv') download(new Blob([toCSV(toRows(rows, dateFmt))], { type: 'text/csv;charset=utf-8' }), `transport-${stamp}.csv`)
       else if (format === 'ics') download(new Blob([toICS(buildGroups(rows, groupBy))], { type: 'text/calendar;charset=utf-8' }), `transport-${stamp}.ics`)
       else download(new Blob([toBackup(all, reminders)], { type: 'application/json' }), `transport-backup-${stamp}.json`)
+      onExported(format)
       setMsg('ส่งออกแล้ว')
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e))
