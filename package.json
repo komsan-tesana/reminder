@@ -1,7 +1,7 @@
 {
   "name": "reminder",
   "private": true,
-  "version": "0.4.4",
+  "version": "0.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,8 @@
     "test": "vitest run",
     "deploy": "bash scripts/deploy.sh",
     "deploy:minor": "bash scripts/deploy.sh minor",
-    "deploy:major": "bash scripts/deploy.sh major"
+    "deploy:major": "bash scripts/deploy.sh major",
+    "deploy:worker": "bash scripts/deploy-worker.sh"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.21",
@@ -30,6 +31,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "fake-indexeddb": "^6.2.5",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.4"

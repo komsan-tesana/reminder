@@ -18,6 +18,8 @@ import { toICS } from './lib/exporters'
 import { buildGroups } from './lib/group'
 import { makeSample } from './lib/sample'
 import { systemNotify, useReminderEngine } from './lib/useReminderEngine'
+import { buildPushPlan } from './lib/pushPlan'
+import { disablePush, enablePush, pushState, syncPush, testPush, type PushState } from './lib/push'
 import type { Filters, NotifySettings, Reminder, Shipment } from './types'
 
 // rarely used dialogs are loaded on demand to keep the first load small
@@ -95,6 +97,71 @@ export default function App() {
     await db.reminders.where('id').anyOf(ids).modify({ firedAt: now })
     setReminders(await db.reminders.toArray())
   }, [])
+
+  // ---- Web Push (optional: needs the Worker in /worker) ----
+  const [pushSt, setPushSt] = useState<PushState>('unconfigured')
+  const [pushMsg, setPushMsg] = useState('')
+  const [pushBusy, setPushBusy] = useState(false)
+  useEffect(() => {
+    pushState().then(setPushSt)
+  }, [])
+  const pushPlan = useMemo(() => buildPushPlan(shipments, reminders, settings.notify, new Date()), [shipments, reminders, settings.notify])
+  const planRef = useRef(pushPlan)
+  planRef.current = pushPlan
+
+  const doPushSync = useCallback(async () => {
+    try {
+      const n = await syncPush(planRef.current)
+      setPushMsg(`ซิงก์ล่าสุด ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} · ปลุกตามเวลา ${n} ครั้งข้างหน้า`)
+    } catch (e) {
+      setPushMsg(`ซิงก์ไม่สำเร็จ: ${e instanceof Error ? e.message : e} (จะลองใหม่เมื่อข้อมูลเปลี่ยนหรือเปิดแอปอีกครั้ง)`)
+    }
+  }, [])
+
+  // keep the server's wake-up times in step with the data: after changes, and when the app comes back
+  useEffect(() => {
+    if (!loaded || pushSt !== 'on') return
+    const t = setTimeout(doPushSync, 3000)
+    return () => clearTimeout(t)
+  }, [loaded, pushSt, pushPlan, doPushSync])
+  useEffect(() => {
+    if (pushSt !== 'on') return
+    const onVisible = () => document.visibilityState === 'visible' && void doPushSync()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [pushSt, doPushSync])
+
+  async function togglePush(on: boolean) {
+    setPushBusy(true)
+    setPushMsg('')
+    try {
+      if (on) {
+        await enablePush()
+        setPushSt(await pushState())
+        await doPushSync()
+      } else {
+        await disablePush()
+        setPushSt(await pushState())
+        setPushMsg('ปิด Push แล้ว')
+      }
+    } catch (e) {
+      setPushSt(await pushState())
+      setPushMsg(e instanceof Error ? e.message : String(e))
+    } finally {
+      setPushBusy(false)
+    }
+  }
+  async function pushTest() {
+    setPushBusy(true)
+    try {
+      await testPush(planRef.current)
+      setPushMsg('ส่งคำสั่งทดสอบแล้ว ล็อกจอแล้วรอประมาณ 2 นาที จะมีแจ้งเตือน “ทดสอบ Push”')
+    } catch (e) {
+      setPushMsg(`ทดสอบไม่สำเร็จ: ${e instanceof Error ? e.message : e}`)
+    } finally {
+      setPushBusy(false)
+    }
+  }
 
   useReminderEngine({ ready: loaded, shipments, reminders, notify: settings.notify, push, markFired })
 
@@ -421,6 +488,9 @@ export default function App() {
             onDelete={deleteReminder}
             onTest={testNotify}
             onExportCalendar={exportCalendar}
+            push={{ state: pushSt, status: pushMsg, busy: pushBusy }}
+            onPushToggle={togglePush}
+            onPushTest={pushTest}
             onClose={() => setDialog(null)}
           />
         )}
