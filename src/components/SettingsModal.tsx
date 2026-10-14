@@ -1,4 +1,6 @@
 import Modal from './Modal'
+import Select from './Select'
+import Checkbox from './Checkbox'
 import { DEFAULT_TONES, type DisplaySettings } from '../lib/db'
 import type { Tone } from '../lib/group'
 import { THEMES, THEME_LABEL } from '../lib/theme'
@@ -57,20 +59,19 @@ export default function SettingsModal({ display, era, theme, groupBy, groupChoic
         <div className="row">
           <label>
             จัดกลุ่มชิปตาม
-            <select value={groupBy} onChange={(e) => onGroupBy(e.target.value as GroupBy)}>
-              {groupChoices.map((g) => (
-                <option key={g.value} value={g.value}>
-                  {g.label}
-                </option>
-              ))}
-            </select>
+            <Select value={groupBy} label="จัดกลุ่มชิปตาม" options={groupChoices} onChange={(v) => onGroupBy(v as GroupBy)} />
           </label>
           <label>
             ปีที่แสดง
-            <select value={era} onChange={(e) => onEra(e.target.value as Era)}>
-              <option value="BE">พ.ศ.</option>
-              <option value="CE">ค.ศ.</option>
-            </select>
+            <Select
+              value={era}
+              label="ปีที่แสดง"
+              options={[
+                { value: 'BE', label: 'พ.ศ.' },
+                { value: 'CE', label: 'ค.ศ.' },
+              ]}
+              onChange={(v) => onEra(v as Era)}
+            />
           </label>
         </div>
       </div>
@@ -78,19 +79,14 @@ export default function SettingsModal({ display, era, theme, groupBy, groupChoic
       <h3>สีสถานะงานบนปฏิทิน</h3>
       <div className="form">
         <label className="row">
-          <input type="checkbox" checked={display.statusColors} onChange={(e) => onChange({ ...display, statusColors: e.target.checked })} />
+          <Checkbox checked={display.statusColors} onChange={(statusColors) => onChange({ ...display, statusColors })} />
           แสดงสีตามสถานะ (ปิด = ทุกงานเป็นสีเดียว)
         </label>
         <ul className="tone-list" aria-disabled={!display.statusColors}>
           {TONES.map(({ tone, label, hint }) => (
             <li key={tone} className={display.statusColors ? '' : 'off'}>
               <label className="row">
-                <input
-                  type="checkbox"
-                  disabled={!display.statusColors}
-                  checked={display.tones[tone].show}
-                  onChange={(e) => setTone(tone, { show: e.target.checked })}
-                />
+                <Checkbox disabled={!display.statusColors} checked={display.tones[tone].show} onChange={(show) => setTone(tone, { show })} />
                 <span className="grow">
                   {label} <span className="muted small">· {hint}</span>
                 </span>

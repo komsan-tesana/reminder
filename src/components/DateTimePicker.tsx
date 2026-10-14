@@ -136,3 +136,65 @@ export function DateTimePicker({ value, onChange, era, label }: DTProps) {
     </Popover.Root>
   )
 }
+
+type DProps = { value: string; onChange: (v: string) => void; era: Era; label: string; placeholder?: string }
+
+/** Date only ("yyyy-mm-dd") from a calendar popup; shows `placeholder` while empty. */
+export function DatePicker({ value, onChange, era, label, placeholder = 'เลือกวันที่' }: DProps) {
+  const [open, setOpen] = useState(false)
+  const selected = value ? new Date(`${value}T00:00:00`) : undefined
+  const valid = !!selected && !Number.isNaN(selected.getTime())
+  const [month, setMonth] = useState<Date>(valid ? selected! : new Date())
+  return (
+    <Popover.Root
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o)
+        if (o) setMonth(valid ? selected! : new Date())
+      }}
+    >
+      <Popover.Trigger aria-label={label} className="min-w-44 text-left">
+        📅 {valid ? fmtDate(value, era, 'D MMM YYYY') : <span className="text-muted">{placeholder}</span>}
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content align="start" sideOffset={4} collisionPadding={8} className={content}>
+          <DayPicker
+            mode="single"
+            locale={th}
+            weekStartsOn={1}
+            showOutsideDays
+            month={month}
+            onMonthChange={setMonth}
+            selected={valid ? selected : undefined}
+            onSelect={(d) => {
+              if (!d) return
+              onChange(localDate(d))
+              setOpen(false)
+            }}
+            formatters={{ formatCaption: (m) => fmtDate(localDate(m), era, 'MMMM YYYY') }}
+            style={
+              {
+                '--rdp-accent-color': 'var(--accent-fill)',
+                '--rdp-accent-background-color': 'color-mix(in srgb, var(--accent) 18%, transparent)',
+                '--rdp-day-height': '34px',
+                '--rdp-day-width': '34px',
+                '--rdp-day_button-height': '32px',
+                '--rdp-day_button-width': '32px',
+              } as React.CSSProperties
+            }
+          />
+          <div className="mt-2 flex justify-end border-t border-line pt-2">
+            <button
+              onClick={() => {
+                onChange(localDate(new Date()))
+                setOpen(false)
+              }}
+            >
+              วันนี้
+            </button>
+          </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  )
+}

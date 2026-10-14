@@ -1,4 +1,6 @@
 import Modal from './Modal'
+import Select from './Select'
+import Checkbox from './Checkbox'
 import { TimePicker } from './DateTimePicker'
 import DeliveryNote, { type PushInfo } from './DeliveryNote'
 import { countPendingReminders, pushWanted } from '../lib/pushStatus'
@@ -22,7 +24,7 @@ export default function NotifyModal({ notify, reminders, onNotify, onTest, push,
       <h3>สรุปประจำวัน</h3>
       <div className="form">
         <label className="row">
-          <input type="checkbox" checked={notify.enabled} disabled={push.busy} onChange={(e) => onDigestToggle(e.target.checked)} />
+          <Checkbox checked={notify.enabled} disabled={push.busy} onChange={onDigestToggle} />
           แจ้งเตือนอัตโนมัติทุกวัน สรุปงานวันนี้และล่วงหน้า แยกเป็นรายวัน
         </label>
         <div className="row">
@@ -31,22 +33,20 @@ export default function NotifyModal({ notify, reminders, onNotify, onTest, push,
             <TimePicker label="เวลาแจ้งเตือน" value={notify.time} onChange={(time) => onNotify({ ...notify, time })} />
           </label>
           <label className="row">
-            <input type="checkbox" checked={notify.today} onChange={(e) => onNotify({ ...notify, today: e.target.checked })} />
+            <Checkbox checked={notify.today} onChange={(today) => onNotify({ ...notify, today })} />
             วันนี้
           </label>
           <label>
             แจ้งล่วงหน้า
-            <select value={notify.daysAhead} onChange={(e) => onNotify({ ...notify, daysAhead: Number(e.target.value) })}>
-              <option value={0}>ไม่ล่วงหน้า</option>
-              {[1, 2, 3, 5, 7, 14].map((n) => (
-                <option key={n} value={n}>
-                  {n === 1 ? 'พรุ่งนี้' : `${n} วันข้างหน้า`}
-                </option>
-              ))}
-            </select>
+            <Select
+              value={String(notify.daysAhead)}
+              label="แจ้งล่วงหน้า"
+              options={[{ value: '0', label: 'ไม่ล่วงหน้า' }, ...[1, 2, 3, 5, 7, 14].map((n) => ({ value: String(n), label: n === 1 ? 'พรุ่งนี้' : `${n} วันข้างหน้า` }))]}
+              onChange={(v) => onNotify({ ...notify, daysAhead: Number(v) })}
+            />
           </label>
           <label className="row">
-            <input type="checkbox" checked={notify.sound} onChange={(e) => onNotify({ ...notify, sound: e.target.checked })} />
+            <Checkbox checked={notify.sound} onChange={(sound) => onNotify({ ...notify, sound })} />
             🔊 เสียงแจ้งเตือน
           </label>
           <button onClick={onTest}>ทดสอบ</button>

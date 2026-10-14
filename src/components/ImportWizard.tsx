@@ -6,6 +6,7 @@ import { readWorkbook } from '../lib/readWorkbook'
 import { commitImport, loadMapping, saveMapping } from '../lib/db'
 import { fmtDate } from '../lib/format'
 import Modal from './Modal'
+import Select from './Select'
 
 type Props = {
   onClose: () => void
@@ -137,14 +138,12 @@ export default function ImportWizard({ onClose, onImported }: Props) {
                     {f.label}
                     {f.required && ' *'}
                   </span>
-                  <select value={mapping[f.key] ?? ''} onChange={(e) => setCol(f.key, e.target.value)}>
-                    <option value="">— ไม่ใช้ —</option>
-                    {sheet.headers.map((h, i) => (
-                      <option key={i} value={i}>
-                        {h || `(คอลัมน์ ${i + 1})`}
-                      </option>
-                    ))}
-                  </select>
+                  <Select
+                    value={String(mapping[f.key] ?? '')}
+                    label={f.label}
+                    options={[{ value: '', label: '— ไม่ใช้ —' }, ...sheet.headers.map((h, i) => ({ value: String(i), label: h || `(คอลัมน์ ${i + 1})` }))]}
+                    onChange={(v) => setCol(f.key, v)}
+                  />
                 </label>
               ))}
             </div>
@@ -152,18 +151,28 @@ export default function ImportWizard({ onClose, onImported }: Props) {
             <div className="options">
               <label>
                 ปีในไฟล์ (ข้อความวันที่)
-                <select value={era} onChange={(e) => setEra(e.target.value as EraMode)}>
-                  <option value="auto">ตรวจอัตโนมัติ</option>
-                  <option value="CE">ค.ศ.</option>
-                  <option value="BE">พ.ศ.</option>
-                </select>
+                <Select
+                  value={era}
+                  label="ปีในไฟล์"
+                  options={[
+                    { value: 'auto', label: 'ตรวจอัตโนมัติ' },
+                    { value: 'CE', label: 'ค.ศ.' },
+                    { value: 'BE', label: 'พ.ศ.' },
+                  ]}
+                  onChange={(v) => setEra(v as EraMode)}
+                />
               </label>
               <label>
                 วิธีนำเข้า
-                <select value={mode} onChange={(e) => setMode(e.target.value as 'merge' | 'replace')}>
-                  <option value="merge">รวมกับข้อมูลเดิม (ตัวซ้ำถูกอัปเดต)</option>
-                  <option value="replace">แทนที่ข้อมูลเดิมทั้งหมด</option>
-                </select>
+                <Select
+                  value={mode}
+                  label="วิธีนำเข้า"
+                  options={[
+                    { value: 'merge', label: 'รวมกับข้อมูลเดิม (ตัวซ้ำถูกอัปเดต)' },
+                    { value: 'replace', label: 'แทนที่ข้อมูลเดิมทั้งหมด' },
+                  ]}
+                  onChange={(v) => setMode(v as 'merge' | 'replace')}
+                />
               </label>
             </div>
 

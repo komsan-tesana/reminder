@@ -14,6 +14,7 @@ import { fmtDate, fmtQty } from '../lib/format'
 import { groupKey } from '../lib/group'
 import type { Available } from '../lib/available'
 import ColumnFilter from './ColumnFilter'
+import Checkbox from './Checkbox'
 import type { Era, GroupBy, Shipment } from '../types'
 
 /** columns that get a header filter in the table; `get` is the text a row shows (and is filtered by) */
@@ -77,7 +78,7 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
         enableColumnFilter: false,
         enableGlobalFilter: false,
         header: '',
-        cell: ({ row }) => <input type="checkbox" checked={selected.has(row.id)} onChange={() => toggle(row.id)} aria-label={`เลือก ${row.original.so}`} />,
+        cell: ({ row }) => <Checkbox checked={selected.has(row.id)} onChange={() => toggle(row.id)} label={`เลือก ${row.original.so}`} />,
       },
       ...text('so', 'SO', av.so, 'nw so', ({ row }) => (
         <>
@@ -191,7 +192,7 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
             return (
               <li key={r.id}>
                 <label className={`flex gap-3 rounded-lg border p-3 ${on ? 'border-accent bg-accent/10' : 'border-line bg-bg'}`}>
-                  <input type="checkbox" className="mt-1 h-5 w-5 shrink-0" checked={on} onChange={() => toggle(r.id)} aria-label={`เลือก ${r.so}`} />
+                  <Checkbox className="mt-1 !h-5 !w-5" checked={on} onChange={() => toggle(r.id)} label={`เลือก ${r.so}`} />
                   <span className="min-w-0 flex-1 break-words">
                     <span className="flex items-baseline justify-between gap-2">
                       <b>
@@ -262,7 +263,7 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
                 {hg.headers.map((h) => (
                   <th key={h.id} className={h.column.columnDef.meta?.th}>
                     {h.column.id === 'select' ? (
-                      <input type="checkbox" checked={allChosen} onChange={toggleAll} aria-label="เลือกทั้งหมด" />
+                      <Checkbox checked={allChosen} onChange={toggleAll} label="เลือกทั้งหมด" />
                     ) : (
                       <>
                         {flexRender(h.column.columnDef.header, h.getContext())}{' '}

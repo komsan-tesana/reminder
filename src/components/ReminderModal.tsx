@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { flexRender, getCoreRowModel, getSortedRowModel, useReactTable, type ColumnDef } from '@tanstack/react-table'
 import Modal from './Modal'
+import Checkbox from './Checkbox'
 import { DateTimePicker } from './DateTimePicker'
 import { addDays, localDateTime } from '../lib/reminders'
 import { fmtDate } from '../lib/format'
@@ -45,7 +46,7 @@ export default function ReminderModal({ era, notify, reminders, draft, onAdd, on
         id: 'done',
         header: 'เสร็จ',
         meta: { th: 'w-10' },
-        cell: ({ row }) => <input type="checkbox" checked={row.original.done} onChange={() => onToggle(row.original)} aria-label="เสร็จแล้ว" />,
+        cell: ({ row }) => <Checkbox checked={row.original.done} onChange={() => onToggle(row.original)} label="เสร็จแล้ว" />,
       },
       { id: 'title', header: 'ข้อความ', accessorKey: 'title', cell: ({ row }) => <span className={row.original.done ? 'line-through' : ''}>{row.original.title}</span> },
       {

@@ -51,12 +51,12 @@ export default function FilterBar({ shipments, available, filters, shown, onChan
       {available.driver && <SearchSelect title="คนขับ" value={filters.driver} options={opts.driver} onChange={(driver) => set({ driver })} />}
       {available.customer && <SearchSelect title="ลูกค้า" value={filters.customer} options={opts.customer} onChange={(customer) => set({ customer })} />}
       </div>
-      {hasFilters(filters) && (
-        <>
-          <span className="muted small">{shown.toLocaleString()} รายการ</span>
-          <button onClick={() => onChange(NO_FILTERS)}>ล้างตัวกรอง</button>
-        </>
-      )}
+      <div className={`filter-result ${hasFilters(filters) ? '' : 'idle'}`} aria-hidden={!hasFilters(filters)}>
+        <span className="muted small">{shown.toLocaleString()} รายการ</span>
+        <button tabIndex={hasFilters(filters) ? 0 : -1} onClick={() => onChange(NO_FILTERS)}>
+          ล้างตัวกรอง
+        </button>
+      </div>
     </div>
   )
 }
