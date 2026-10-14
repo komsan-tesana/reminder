@@ -289,14 +289,36 @@ describe('push config', () => {
   })
 })
 
-describe('daily summary drives push', () => {
-  it('subscribes when switched on, unsubscribes when switched off, otherwise leaves it alone', async () => {
-    const { digestPushAction } = await import('./pushStatus')
-    expect(digestPushAction('off', true)).toBe('subscribe')
-    expect(digestPushAction('on', true)).toBe('none') // already subscribed
-    for (const s of ['denied', 'ios-install', 'unsupported', 'unconfigured'] as const) expect(digestPushAction(s, true)).toBe('none')
-    expect(digestPushAction('on', false)).toBe('unsubscribe')
-    for (const s of ['off', 'denied', 'ios-install', 'unsupported', 'unconfigured'] as const) expect(digestPushAction(s, false)).toBe('none')
+describe('push follows what needs it', () => {
+  const rem = (over: Partial<import('../types').Reminder> = {}) => ({ id: 'r', title: 't', at: '2026-10-15T08:00', done: false, ...over })
+
+  it('counts only reminders that can still fire', async () => {
+    const { countPendingReminders } = await import('./pushStatus')
+    expect(countPendingReminders([])).toBe(0)
+    expect(countPendingReminders([rem(), rem({ id: 'b', done: true }), rem({ id: 'c', firedAt: 1 })])).toBe(1)
+  })
+
+  it('wants push when the summary is on or a reminder is waiting', async () => {
+    const { pushWanted } = await import('./pushStatus')
+    expect(pushWanted(false, 0)).toBe(false)
+    expect(pushWanted(true, 0)).toBe(true)
+    expect(pushWanted(false, 2)).toBe(true)
+    expect(pushWanted(true, 2)).toBe(true)
+  })
+
+  it('subscribes when wanted, unsubscribes when nothing needs it, otherwise leaves it alone', async () => {
+    const { pushAction } = await import('./pushStatus')
+    expect(pushAction('off', true)).toBe('subscribe')
+    expect(pushAction('on', true)).toBe('none') // already subscribed
+    for (const s of ['denied', 'ios-install', 'unsupported', 'unconfigured'] as const) expect(pushAction(s, true)).toBe('none')
+    expect(pushAction('on', false)).toBe('unsubscribe')
+    for (const s of ['off', 'denied', 'ios-install', 'unsupported', 'unconfigured'] as const) expect(pushAction(s, false)).toBe('none')
+  })
+
+  it('turning the summary off keeps push while a reminder is still waiting', async () => {
+    const { pushAction, pushWanted } = await import('./pushStatus')
+    expect(pushAction('on', pushWanted(false, 1))).toBe('none') // summary off, 1 reminder pending: stay subscribed
+    expect(pushAction('on', pushWanted(false, 0))).toBe('unsubscribe') // nothing left: let go
   })
 
   it('auto-subscribes at start-up only when already allowed (never prompts without a click)', async () => {
@@ -308,14 +330,13 @@ describe('daily summary drives push', () => {
     expect(shouldAutoSubscribe(false, 'off', 'granted')).toBe(false)
   })
 
-  it('tells the user how the summary will reach them, in every state', async () => {
+  it('tells the user how notifications will reach them, in every state', async () => {
     const { describeDelivery } = await import('./pushStatus')
-    expect(describeDelivery(false, 'on')).toBeNull() // switch off: nothing to say
+    expect(describeDelivery(false, 'on')).toBeNull() // nothing needs push: nothing to say
     expect(describeDelivery(true, 'on')).toMatchObject({ kind: 'ok' })
     for (const s of ['off', 'ios-install', 'denied'] as const) expect(describeDelivery(true, s)?.kind).toBe('warn')
     for (const s of ['unsupported', 'unconfigured'] as const) expect(describeDelivery(true, s)?.kind).toBe('info')
     expect(describeDelivery(true, 'ios-install')?.text).toMatch(/หน้าจอโฮม/)
-    // every non-push state must say what still works
     for (const s of ['off', 'ios-install', 'denied', 'unsupported', 'unconfigured'] as const) expect(describeDelivery(true, s)?.text).toMatch(/เปิดแอปค้างไว้/)
   })
 })

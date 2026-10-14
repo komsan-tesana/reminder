@@ -17,7 +17,7 @@ import { makeSample } from './lib/sample'
 import { systemNotify, useReminderEngine } from './lib/useReminderEngine'
 import { buildPushPlan } from './lib/pushPlan'
 import { disablePush, enablePush, pushState, syncPush, testPush, type PushState } from './lib/push'
-import { digestPushAction, shouldAutoSubscribe } from './lib/pushStatus'
+import { countPendingReminders, pushAction, pushWanted, shouldAutoSubscribe } from './lib/pushStatus'
 import type { PushPlan } from './lib/pushPlan'
 import type { Filters, NotifySettings, Reminder, Shipment } from './types'
 
@@ -131,13 +131,14 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [pushSt, doPushSync])
 
-  // Push is not a separate setting: it follows the "daily summary" switch. Turning it on asks for
-  // permission and subscribes (this runs inside the click, which iOS requires for the prompt);
-  // turning it off unsubscribes. The in-app summary works either way.
+  // Push is not a separate setting. It is wanted while the daily summary is on OR a reminder is
+  // waiting. Turning the summary on asks for permission and subscribes (this runs inside the click,
+  // which iOS requires for the prompt); turning it off unsubscribes unless reminders still need it.
+  // The in-app summary and reminders work either way.
   async function toggleDigest(on: boolean) {
     const notify = { ...settings.notify, enabled: on }
     update({ notify })
-    const action = digestPushAction(pushSt, on)
+    const action = pushAction(pushSt, pushWanted(on, countPendingReminders(reminders)))
     if (action === 'none') return
     setPushBusy(true)
     setPushMsg('')
@@ -158,16 +159,16 @@ export default function App() {
     }
   }
 
-  // someone who switched the summary on before push existed: subscribe quietly, but only when the
-  // browser already allows notifications, so nothing is ever prompted without a click
+  // someone who needed push before this install had a subscription (summary on, or reminders
+  // waiting): subscribe quietly, but only when the browser already allows notifications
   useEffect(() => {
     if (!loaded) return
     const perm = typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
-    if (!shouldAutoSubscribe(settings.notify.enabled, pushSt, perm)) return
+    if (!shouldAutoSubscribe(pushWanted(settings.notify.enabled, countPendingReminders(reminders)), pushSt, perm)) return
     enablePush()
       .then(async () => setPushSt(await pushState()))
       .catch(() => {})
-  }, [loaded, pushSt, settings.notify.enabled])
+  }, [loaded, pushSt, settings.notify.enabled, reminders])
 
   useReminderEngine({ ready: loaded, shipments, reminders, notify: settings.notify, push, markFired })
 
@@ -274,17 +275,45 @@ export default function App() {
     setDialog(null)
   }
 
+  // Adding a reminder is a click, so this is where Push can be switched on for it: start the
+  // permission request before awaiting anything else (iOS only shows the prompt for a gesture).
   const addReminder = async (r: Reminder) => {
+    const wantsSubscribe = pushAction(pushSt, true) === 'subscribe'
+    const subscribing = wantsSubscribe ? enablePush().then(() => null, (e: unknown) => e) : null
     await db.reminders.put(r)
-    setReminders(await db.reminders.toArray())
+    const all = await db.reminders.toArray()
+    setReminders(all)
+    if (!subscribing) return
+    setPushBusy(true)
+    setPushMsg('')
+    const failure = await subscribing
+    setPushSt(await pushState())
+    if (failure) setPushMsg(failure instanceof Error ? failure.message : String(failure))
+    else await doPushSync(buildPushPlan(shipments, all, settings.notify, new Date()))
+    setPushBusy(false)
+  }
+
+  /** After a reminder is finished or deleted: let go of push if nothing needs it any more. */
+  async function releasePushIfIdle(all: Reminder[]) {
+    if (pushAction(pushSt, pushWanted(settings.notify.enabled, countPendingReminders(all))) !== 'unsubscribe') return
+    try {
+      await disablePush()
+      setPushSt(await pushState())
+    } catch {
+      /* the server prunes dead devices itself; nothing to tell the user */
+    }
   }
   const toggleReminder = async (r: Reminder) => {
     await db.reminders.update(r.id, { done: !r.done })
-    setReminders(await db.reminders.toArray())
+    const all = await db.reminders.toArray()
+    setReminders(all)
+    await releasePushIfIdle(all)
   }
   const deleteReminder = async (id: string) => {
     await db.reminders.delete(id)
-    setReminders(await db.reminders.toArray())
+    const all = await db.reminders.toArray()
+    setReminders(all)
+    await releasePushIfIdle(all)
   }
 
   async function testNotify() {
