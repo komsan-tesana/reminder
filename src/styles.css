@@ -312,3 +312,36 @@ main.sheet-open { padding-bottom: calc(34dvh + env(safe-area-inset-bottom)); }
 [data-sonner-toaster] [data-sonner-toast] [data-description] { color: var(--text); font-size: 14px; font-weight: 400; white-space: pre-line; }
 [data-sonner-toaster] [data-sonner-toast] [data-close-button] { left: auto; right: 6px; top: 6px; transform: none; width: auto; height: auto; padding: 4px 8px; border: 0; border-radius: 6px; background: none; color: var(--muted); opacity: 1; }
 [data-sonner-toaster] [data-sonner-toast] [data-close-button]:hover { background: none; color: var(--text); }
+
+/* desktop filter bar: search takes 40% of the row and the dropdowns share the other 60% equally,
+   whatever the window width. "N items / clear" gets its own right-aligned line, only while a filter is on. */
+@media (min-width: 821px) {
+  .filterbar { display: grid; grid-template-columns: 2fr 3fr; gap: 8px; align-items: center; }
+  .filterbar input[type='search'] { width: 100%; min-width: 0; }
+  .filter-selects { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+  .filterbar .ss { flex: none; width: 100%; min-width: 0; }
+  .filter-result { grid-column: 1 / -1; min-width: 0; margin-left: 0; }
+  .filter-result.idle { display: none; }
+}
+
+/* เปี๊ยก, the app cat: fixed to the bottom edge; only the cat and its bubble take clicks */
+.buddy { position: fixed; left: 0; bottom: max(6px, env(safe-area-inset-bottom)); z-index: 35; width: 84px; height: 60px; display: flex; align-items: flex-end; justify-content: center; pointer-events: none; transition-property: transform; transition-timing-function: linear; }
+.buddy .buddy-btn { position: relative; pointer-events: auto; border: 0; background: none; padding: 0; line-height: 0; cursor: pointer; border-radius: 6px; }
+.buddy .buddy-btn:hover { border: 0; }
+.buddy .buddy-btn svg { image-rendering: pixelated; }
+.buddy-sit svg, .buddy-yawn svg { transform-origin: bottom; animation: buddy-breathe 3.2s ease-in-out infinite; }
+.buddy-sleep svg { transform-origin: bottom; animation: buddy-breathe 4.4s ease-in-out infinite; }
+.buddy-shout svg { animation: buddy-shake 0.14s linear infinite; }
+@keyframes buddy-shake { 0%, 100% { transform: translateX(-1px); } 50% { transform: translateX(1px); } }
+.buddy-bubble { position: absolute; bottom: calc(100% + 6px); left: 0; width: max-content; max-width: min(230px, calc(100vw - 24px)); display: flex; gap: 4px; align-items: flex-start; pointer-events: auto; padding: 6px 6px 6px 10px; font-size: 13px; line-height: 1.35; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.2); animation: buddy-pop 0.18s ease-out; }
+.buddy-bubble.right { left: auto; right: 0; }
+.buddy-bubble .icon { padding: 0 4px; color: var(--muted); }
+.buddy-fx { position: absolute; font-size: 13px; font-weight: 700; line-height: 1; pointer-events: none; }
+.buddy-z { right: 2px; top: -4px; color: var(--muted); animation: buddy-float 2.2s ease-in-out infinite; }
+.buddy-heart { left: 50%; top: -6px; color: #e8647a; animation: buddy-float 1.4s ease-out infinite; }
+@keyframes buddy-breathe { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.04); } }
+@keyframes buddy-float { 0% { opacity: 0; transform: translateY(6px); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(-10px); } }
+@keyframes buddy-pop { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .buddy, .buddy * { animation: none !important; transition: none !important; }
+}

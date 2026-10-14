@@ -50,3 +50,36 @@ export async function playChime(volume = 0.25): Promise<boolean> {
   })
   return true
 }
+
+/** A synthesised "meow" for the app cat: a sawtooth glides up and down through a vowel-like filter. */
+export async function playMeow(volume = 0.18): Promise<boolean> {
+  const ac = getContext()
+  if (!ac) return false
+  try {
+    if (ac.state === 'suspended') await ac.resume()
+  } catch {
+    return false
+  }
+  if (ac.state !== 'running') return false
+
+  const t = ac.currentTime
+  const osc = ac.createOscillator()
+  const filter = ac.createBiquadFilter()
+  const gain = ac.createGain()
+  osc.type = 'sawtooth'
+  osc.frequency.setValueAtTime(420, t)
+  osc.frequency.exponentialRampToValueAtTime(820, t + 0.16)
+  osc.frequency.exponentialRampToValueAtTime(520, t + 0.5)
+  filter.type = 'bandpass'
+  filter.Q.value = 4
+  filter.frequency.setValueAtTime(900, t)
+  filter.frequency.exponentialRampToValueAtTime(1800, t + 0.2)
+  filter.frequency.exponentialRampToValueAtTime(1000, t + 0.5)
+  gain.gain.setValueAtTime(0.0001, t)
+  gain.gain.exponentialRampToValueAtTime(volume, t + 0.05)
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.55)
+  osc.connect(filter).connect(gain).connect(ac.destination)
+  osc.start(t)
+  osc.stop(t + 0.6)
+  return true
+}

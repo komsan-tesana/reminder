@@ -2,6 +2,8 @@ import Dexie, { type Table } from 'dexie'
 import type { Era, GroupBy, Mapping, NotifySettings, Reminder, Shipment, Theme } from '../types'
 import { isTheme } from './theme'
 import { DEFAULT_TONES, migrateToneColor, type ToneSetting } from './tones'
+import type { Season } from './buddy'
+import type { BuddyStats } from './buddyUnlocks'
 
 export { DEFAULT_TONES }
 export type { ToneSetting }
@@ -26,13 +28,17 @@ export const db = new AppDB()
 /** statusColors is the master switch; each tone can also be hidden or recoloured. */
 export type DisplaySettings = { statusColors: boolean; tones: Record<Tone, ToneSetting> }
 
-export type Settings = { era: Era; groupBy: GroupBy; theme: Theme; notify: NotifySettings; display: DisplaySettings }
+/** the app cat (เปี๊ยก): shown or hidden, and whether it meows when poked */
+export type BuddySettings = { visible: boolean; sound: boolean; skin: string; outfit: string }
+
+export type Settings = { era: Era; groupBy: GroupBy; theme: Theme; notify: NotifySettings; display: DisplaySettings; buddy: BuddySettings }
 export const DEFAULT_SETTINGS: Settings = {
   era: 'BE',
   groupBy: 'customer',
   theme: 'system',
   notify: { enabled: false, time: '08:00', today: true, daysAhead: 1, sound: true },
   display: { statusColors: true, tones: DEFAULT_TONES },
+  buddy: { visible: true, sound: false, skin: 'calico', outfit: 'none' },
 }
 const SETTINGS_KEY = 'reminder.settings.v1'
 const MAPPING_KEY = 'reminder.mapping.v1'
@@ -71,6 +77,7 @@ export function loadSettings(): Settings {
     theme: isTheme(s.theme) ? s.theme : 'system',
     notify,
     display: { statusColors: s.display?.statusColors ?? true, tones },
+    buddy: { ...DEFAULT_SETTINGS.buddy, ...s.buddy },
   }
 }
 const PANEL_KEY = 'reminder.panel.v1'
@@ -79,6 +86,24 @@ export function loadPanelSize(): { w: number | null; h: number | null } {
   const ok = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : null)
   return { w: ok(v.w), h: ok(v.h) }
 }
+const BUDDY_KEY = 'reminder.buddy.v1'
+/** progress toward the cat's unlockable skins, outfits and moves; every field is validated on the way in */
+export function loadBuddyStats(): BuddyStats {
+  const raw = read<Record<string, unknown>>(BUDDY_KEY, {})
+  const count = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0)
+  const day = /^\d{4}-\d{2}-\d{2}$/
+  const seasons: Season[] = ['songkran', 'newyear', 'krathong']
+  return {
+    pets: count(raw.pets),
+    days: Array.isArray(raw.days) ? raw.days.filter((x): x is string => typeof x === 'string' && day.test(x)).slice(-120) : [],
+    remindersDone: count(raw.remindersDone),
+    imports: count(raw.imports),
+    nightOwl: raw.nightOwl === true,
+    seasons: Array.isArray(raw.seasons) ? seasons.filter((x) => (raw.seasons as unknown[]).includes(x)) : [],
+  }
+}
+export const saveBuddyStats = (s: BuddyStats) => write(BUDDY_KEY, s)
+
 export const savePanelSize = (s: { w: number | null; h: number | null }) => write(PANEL_KEY, s)
 
 export const saveSettings = (s: Settings) => write(SETTINGS_KEY, s)
