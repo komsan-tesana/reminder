@@ -1,7 +1,6 @@
 import { parseDate } from './dateParse'
 import type { Group } from './group'
-import { addDays, dailyDigest, localDate, localDateTime } from './reminders'
-import type { NotifySettings, Reminder, Shipment } from '../types'
+import type { Reminder, Shipment } from '../types'
 
 export type DateFmt = 'CE' | 'BE'
 
@@ -95,18 +94,12 @@ const nextDay = (iso: string) => {
   return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10)
 }
 
-/** One all-day event per group, with alarms at 09:00 the day before and 08:00 the same day. */
-export type IcsDigest = { shipments: Shipment[] } & Pick<NotifySettings, 'time' | 'today' | 'daysAhead'>
-
-const DIGEST_HORIZON_DAYS = 90
-
 /**
- * With `digest`, the file also carries the in-app daily summary as one timed event per day at the
- * set time (alert at start), so the phone's Calendar announces it even when the app is closed,
- * and the per-group events become silent so each day alerts once instead of once per group.
+ * One all-day event per group, with alarms at 09:00 the day before and 08:00 the same day.
+ * Events keep a stable UID and carry a growing SEQUENCE, so importing a newer file updates events
+ * already in a calendar instead of duplicating them.
  */
-export function toICS(groups: Group[], now: Date = new Date(), reminders: Reminder[] = [], digest?: IcsDigest): string {
-  // calendars treat a re-imported UID with a higher SEQUENCE as an update to the existing event
+export function toICS(groups: Group[], now: Date = new Date()): string {
   const seq = Math.floor(now.getTime() / 60000)
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Transport Calendar//TH', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Transport Calendar']
   const sorted = [...groups].sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label))
@@ -128,80 +121,15 @@ export function toICS(groups: Group[], now: Date = new Date(), reminders: Remind
       `SUMMARY:${icsEscape(`${g.label} (${g.rows.length})`)}`,
       `DESCRIPTION:${icsEscape(detail.join('\n'))}`,
       'TRANSP:TRANSPARENT',
-      ...(digest
-        ? []
-        : [
-            'BEGIN:VALARM',
-            'ACTION:DISPLAY',
-            `DESCRIPTION:${icsEscape(g.label)}`,
-            'TRIGGER:-PT15H',
-            'END:VALARM',
-            'BEGIN:VALARM',
-            'ACTION:DISPLAY',
-            `DESCRIPTION:${icsEscape(g.label)}`,
-            'TRIGGER:PT8H',
-            'END:VALARM',
-          ]),
-      'END:VEVENT',
-    )
-  }
-  if (digest) {
-    const [hh, mm] = digest.time.split(':').map(Number)
-    const last = digest.shipments.reduce((m, s) => (s.date > m ? s.date : m), '')
-    const horizon = addDays(localDate(now), DIGEST_HORIZON_DAYS)
-    for (let day = localDate(now); day <= last && day <= horizon; day = addDays(day, 1)) {
-      const [y, mo, da] = day.split('-').map(Number)
-      const at = new Date(y, mo - 1, da, hh, mm)
-      if (at <= now) continue // that moment has already passed
-      const dg = dailyDigest(digest.shipments, at, digest)
-      if (!dg) continue
-      const end = new Date(at.getTime() + 15 * 60000)
-      const p2 = (n: number) => String(n).padStart(2, '0')
-      const floating = (d: Date) => `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}T${p2(d.getHours())}${p2(d.getMinutes())}00`
-      lines.push(
-        'BEGIN:VEVENT',
-        `UID:digest-${day}@transport-calendar`,
-        `DTSTAMP:${stamp(now)}`,
-        `LAST-MODIFIED:${stamp(now)}`,
-        `SEQUENCE:${seq}`,
-        `DTSTART:${floating(at)}`,
-        `DTEND:${floating(end)}`,
-        `SUMMARY:${icsEscape(`📅 แผนขนส่ง: ${dg.days.map((d) => `${d.label} ${d.total}`).join(' · ')}`)}`,
-        `DESCRIPTION:${icsEscape(dg.body)}`,
-        'BEGIN:VALARM',
-        'ACTION:DISPLAY',
-        `DESCRIPTION:${icsEscape(dg.body)}`,
-        'TRIGGER:PT0S',
-        'END:VALARM',
-        'END:VEVENT',
-      )
-    }
-  }
-
-  // per-item reminders: timed events with an alert at the start, so the phone's own Calendar
-  // alerts even when the app is closed or the screen is locked
-  const nowLocal = localDateTime(now)
-  for (const r of reminders.filter((x) => !x.done && x.at >= nowLocal).sort((a, b) => a.at.localeCompare(b.at))) {
-    const [d, t] = r.at.split('T')
-    const [y, mo, da] = d.split('-').map(Number)
-    const [h, mi] = t.split(':').map(Number)
-    const end = new Date(y, mo - 1, da, h, mi + 30)
-    const pad = (n: number) => String(n).padStart(2, '0')
-    const endStr = `${end.getFullYear()}${pad(end.getMonth() + 1)}${pad(end.getDate())}T${pad(end.getHours())}${pad(end.getMinutes())}00`
-    lines.push(
-      'BEGIN:VEVENT',
-      `UID:reminder-${r.id.replace(/[^\w-]/g, '_')}@transport-calendar`,
-      `DTSTAMP:${stamp(now)}`,
-      `LAST-MODIFIED:${stamp(now)}`,
-      `SEQUENCE:${seq}`,
-      `DTSTART:${compact(d)}T${t.replace(':', '')}00`,
-      `DTEND:${endStr}`,
-      `SUMMARY:${icsEscape(`🔔 ${r.title}`)}`,
-      ...(r.note ? [`DESCRIPTION:${icsEscape(r.note)}`] : []),
       'BEGIN:VALARM',
       'ACTION:DISPLAY',
-      `DESCRIPTION:${icsEscape(r.title)}`,
-      'TRIGGER:PT0S',
+      `DESCRIPTION:${icsEscape(g.label)}`,
+      'TRIGGER:-PT15H',
+      'END:VALARM',
+      'BEGIN:VALARM',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${icsEscape(g.label)}`,
+      'TRIGGER:PT8H',
       'END:VALARM',
       'END:VEVENT',
     )

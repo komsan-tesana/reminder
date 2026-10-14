@@ -181,21 +181,7 @@ describe('tone colours', () => {
   })
 })
 
-describe('calendar export and platform', () => {
-  it('adds pending reminders as timed events with an alert at the start', () => {
-    const now = new Date(2026, 9, 14, 9, 0)
-    const rems = [
-      { id: 'a', title: 'โทรยืนยัน', at: '2026-10-15T08:00', done: false },
-      { id: 'b', title: 'เสร็จแล้ว', at: '2026-10-16T08:00', done: true },
-      { id: 'c', title: 'ผ่านไปแล้ว', at: '2026-10-13T08:00', done: false },
-    ]
-    const ics = toICS([], now, rems)
-    expect(ics).toContain('DTSTART:20261015T080000')
-    expect(ics).toContain('DTEND:20261015T083000')
-    expect(ics).toContain('TRIGGER:PT0S')
-    expect(ics).not.toContain('เสร็จแล้ว')
-    expect(ics).not.toContain('ผ่านไปแล้ว')
-  })
+describe('platform', () => {
   it('detects iOS (including iPadOS) and gates notifications on Home Screen install', async () => {
     const { detectPlatform, notifyState } = await import('./platform')
     expect(detectPlatform('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)')).toBe('ios')
@@ -241,28 +227,6 @@ describe('daily digest scheduling', () => {
     expect(digestToFire([], at, notify, null)).toBeNull()
     // ...so work that arrives later the same day is still announced
     expect(digestToFire(tomorrow, new Date(2026, 9, 14, 15, 0), notify, null)).not.toBeNull()
-  })
-})
-
-describe('ics daily digest events', () => {
-  const now = new Date(2026, 9, 14, 9, 0)
-  const rows = [make({ id: '1', date: '2026-10-15' }), make({ id: '2', date: '2026-10-15', so: 'SO2' }), make({ id: '3', date: '2026-10-17' })]
-  const digest = { shipments: rows, time: '08:00', today: true, daysAhead: 1 }
-  const ics = toICS(buildGroups(rows, 'customer'), now, [], digest)
-  it('adds one alerting event per day that has something to announce, at the set time', () => {
-    expect(ics).toContain('UID:digest-2026-10-15@transport-calendar')
-    expect(ics).toContain('DTSTART:20261015T080000')
-    expect(ics).toContain('SUMMARY:📅 แผนขนส่ง: วันนี้ 2')
-  })
-  it('skips moments that already passed and days with nothing in the window', () => {
-    expect(ics).not.toContain('UID:digest-2026-10-14@') // 08:00 today is before "now" (09:00)
-    expect(ics).toContain('UID:digest-2026-10-16@') // 16th announces tomorrow (17th)
-    expect(ics).not.toContain('UID:digest-2026-10-13@')
-  })
-  it('mutes the per-group alarms when digests are on, keeps them otherwise', () => {
-    expect(ics).not.toContain('TRIGGER:-PT15H')
-    expect(toICS(buildGroups(rows, 'customer'), now)).toContain('TRIGGER:-PT15H')
-    expect((ics.match(/TRIGGER:PT0S/g) ?? []).length).toBe((ics.match(/UID:digest-/g) ?? []).length)
   })
 })
 

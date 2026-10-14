@@ -10,7 +10,9 @@ type Shown = { title: string; body?: string; tag?: string }
 let shown: Shown[]
 let listeners: Record<string, (e: unknown) => void>
 
-function loadWorker() {
+type Caches = { keys?: () => Promise<string[]>; delete?: (k: string) => Promise<boolean>; open?: (k: string) => Promise<unknown>; match?: (r: unknown) => Promise<unknown> }
+
+function loadWorker(cachesStub: Caches = {}, fetchStub: typeof fetch = fetch) {
   shown = []
   listeners = {}
   const self = {
@@ -18,10 +20,11 @@ function loadWorker() {
       scope: 'https://example.github.io/reminder/',
       showNotification: async (title: string, o: { body?: string; tag?: string }) => void shown.push({ title, body: o.body, tag: o.tag }),
     },
+    clients: { claim: async () => {} },
     addEventListener: (type: string, fn: (e: unknown) => void) => (listeners[type] = fn),
     location: { origin: 'https://example.github.io' },
   }
-  new Function('self', 'caches', 'indexedDB', 'URL', 'Response', 'fetch', readFileSync('public/sw.js', 'utf8'))(self, {}, indexedDB, URL, Response, fetch)
+  new Function('self', 'caches', 'indexedDB', 'URL', 'Response', 'fetch', readFileSync('public/sw.js', 'utf8'))(self, cachesStub, indexedDB, URL, Response, fetchStub)
 }
 
 async function push(data: unknown) {
@@ -82,5 +85,30 @@ describe('service worker push handler', () => {
     )
     await push({ due: now() })
     expect(shown.map((s) => s.tag)).toEqual(['push-generic'])
+  })
+})
+
+describe('service worker housekeeping', () => {
+  it('on activation deletes every cache but its own, including the retired calendar cache', async () => {
+    const deleted: string[] = []
+    loadWorker({ keys: async () => ['transport-calendar-v1', 'transport-calendar-ics', 'some-old-cache'], delete: async (k) => (deleted.push(k), true) })
+    let pending: Promise<unknown> = Promise.resolve()
+    listeners.activate({ waitUntil: (p: Promise<unknown>) => (pending = p) })
+    await pending
+    expect(deleted.sort()).toEqual(['some-old-cache', 'transport-calendar-ics'])
+  })
+
+  it('no longer answers /calendar.ics itself: it is an ordinary network-first request', async () => {
+    const opened: string[] = []
+    const networkReply = new Response('not found', { status: 404 })
+    loadWorker(
+      { open: async (k) => (opened.push(k), { put: async () => {} }), match: async () => undefined },
+      (async () => networkReply) as unknown as typeof fetch,
+    )
+    let reply: Promise<Response> | undefined
+    listeners.fetch({ request: { method: 'GET', url: 'https://example.github.io/reminder/calendar.ics?v=1', mode: 'navigate' }, respondWith: (p: Promise<Response>) => (reply = p) })
+    const res = await reply!
+    expect(res).toBe(networkReply) // the network's answer, not a cached calendar file
+    expect(opened).not.toContain('transport-calendar-ics')
   })
 })
