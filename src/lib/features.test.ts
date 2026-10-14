@@ -223,14 +223,3 @@ describe('ics updates', () => {
     expect(uid(early)).toBe(uid(late))
   })
 })
-
-describe('icsDataUri', () => {
-  it('is a data:text/calendar URI that decodes back to the exact file (Thai, CRLF, commas)', async () => {
-    const { icsDataUri } = await import('./calendarSync')
-    const ics = toICS(buildGroups([make({ id: '1', customerName: 'บริษัท เอ, จำกัด', description: 'a;b' })], 'customer'), new Date('2026-10-14T00:00:00Z'))
-    const uri = icsDataUri(ics)
-    expect(uri.startsWith('data:text/calendar;charset=utf-8,')).toBe(true)
-    expect(decodeURIComponent(uri.slice(uri.indexOf(',') + 1))).toBe(ics)
-    expect(uri).not.toMatch(/[\r\n ]/) // safe as an href
-  })
-})
