@@ -9,13 +9,10 @@ import { db, editShipments, loadPanelSize, loadSettings, restoreBackup, savePane
 import { availableFields, effectiveGroupBy, groupOptions } from './lib/available'
 import { applyFilters, NO_FILTERS } from './lib/filters'
 import type { Group, Tone } from './lib/group'
-import { dailyDigest, dueReminders, localDate } from './lib/reminders'
+import { dailyDigest, dueReminders } from './lib/reminders'
 import { fmtDate } from './lib/format'
 import { playChime } from './lib/sound'
 import { applyTheme, THEME_LABEL } from './lib/theme'
-import { syncToDeviceCalendar } from './lib/calendarSync'
-import { toICS } from './lib/exporters'
-import { buildGroups } from './lib/group'
 import { makeSample } from './lib/sample'
 import { systemNotify, useReminderEngine } from './lib/useReminderEngine'
 import { buildPushPlan } from './lib/pushPlan'
@@ -307,27 +304,6 @@ export default function App() {
     }
   }
 
-  /** Upcoming work plus pending reminders as an .ics the phone's Calendar app will alert from. */
-  async function exportCalendar() {
-    const today = localDate(new Date())
-    const upcoming = shipments.filter((s) => s.date >= today)
-    const n0 = settings.notify
-    // with the daily summary on, the calendar announces it by itself (even with the app closed)
-    const ics = toICS(buildGroups(upcoming, groupBy), new Date(), reminders, n0.enabled ? { shipments, time: n0.time, today: n0.today, daysAhead: n0.daysAhead } : undefined)
-    const result = await syncToDeviceCalendar(ics, `transport-${today.replace(/-/g, '')}.ics`)
-    const n = reminders.filter((r) => !r.done).length
-    const digestNote = n0.enabled ? ` · รวมสรุปรายวันเวลา ${n0.time}` : ''
-    push({
-      title: 'ซิงก์ปฏิทิน',
-      body:
-        result === 'opened'
-          ? `เปิดหน้าต่างเพิ่มลงปฏิทินแล้ว (${upcoming.length} รายการ + เตือน ${n}${digestNote}) กด “เพิ่มทั้งหมด” เพื่อยืนยัน`
-          : result === 'needs-reload'
-            ? 'ดาวน์โหลดไฟล์แทน เพราะเปิดเว็บครั้งแรกยังไม่พร้อม ให้รีเฟรชหน้านี้หนึ่งครั้งแล้วกดซิงก์อีกครั้ง จะขึ้นหน้าต่างเพิ่มลงปฏิทินเอง'
-            : `ดาวน์โหลดไฟล์ปฏิทินแล้ว (${upcoming.length} รายการ + เตือน ${n}${digestNote}) เปิดไฟล์เพื่อเพิ่มลงปฏิทิน`,
-    })
-  }
-
   function remindFor(rows: Shipment[], date: string) {
     const so = [...new Set(rows.map((r) => r.so).filter(Boolean))]
     const who = rows[0]?.customerName
@@ -505,7 +481,6 @@ export default function App() {
             onToggle={toggleReminder}
             onDelete={deleteReminder}
             onTest={testNotify}
-            onExportCalendar={exportCalendar}
             push={{ state: pushSt, status: pushMsg, busy: pushBusy }}
             onDigestToggle={toggleDigest}
             onClose={() => setDialog(null)}

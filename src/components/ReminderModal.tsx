@@ -2,7 +2,6 @@ import { useState } from 'react'
 import Modal from './Modal'
 import { addDays, localDateTime } from '../lib/reminders'
 import { fmtDate } from '../lib/format'
-import { currentPlatform } from '../lib/platform'
 import type { PushState } from '../lib/push'
 import { describeDelivery } from '../lib/pushStatus'
 import type { Era, NotifySettings, Reminder } from '../types'
@@ -19,15 +18,13 @@ type Props = {
   onToggle: (r: Reminder) => void
   onDelete: (id: string) => void
   onTest: () => void | Promise<void>
-  onExportCalendar: () => void
   push: { state: PushState; status: string; busy: boolean }
   /** switching the daily summary also turns Push on/off (permission is asked inside this click) */
   onDigestToggle: (on: boolean) => void
   onClose: () => void
 }
 
-export default function ReminderModal({ era, notify, reminders, draft, onNotify, onAdd, onToggle, onDelete, onTest, onExportCalendar, push, onDigestToggle, onClose }: Props) {
-  const platform = currentPlatform()
+export default function ReminderModal({ era, notify, reminders, draft, onNotify, onAdd, onToggle, onDelete, onTest, push, onDigestToggle, onClose }: Props) {
   const [title, setTitle] = useState(draft?.title ?? '')
   // default: 08:00 the day before the shipment
   const [at, setAt] = useState(draft ? `${addDays(draft.date, -1)}T08:00` : localDateTime(new Date()))
@@ -88,28 +85,9 @@ export default function ReminderModal({ era, notify, reminders, draft, onNotify,
         )}
         {notify.enabled && push.state === 'on' && (
           <p className="muted small">
-            ความเป็นส่วนตัว: ส่งไปที่ server เฉพาะที่อยู่ปลายทางของเครื่องนี้กับ “เวลาที่ต้องปลุก” เท่านั้น ไม่มีชื่อลูกค้า เลข SO หรือข้อความแจ้งเตือน ตัวข้อความอยู่ในเครื่องแล้วประกอบเองตอนถูกปลุก · ปุ่ม “ทดสอบ” จะส่งทั้งในแอปและ Push (ล็อกจอแล้วรอ ~2 นาที) · ถ้าซิงก์ปฏิทินเครื่องด้านล่างด้วย อาจเตือนซ้ำสองทาง
+            ความเป็นส่วนตัว: ส่งไปที่ server เฉพาะที่อยู่ปลายทางของเครื่องนี้กับ “เวลาที่ต้องปลุก” เท่านั้น ไม่มีชื่อลูกค้า เลข SO หรือข้อความแจ้งเตือน ตัวข้อความอยู่ในเครื่องแล้วประกอบเองตอนถูกปลุก · ปุ่ม “ทดสอบ” จะส่งทั้งในแอปและ Push (ล็อกจอแล้วรอ ~2 นาที)
           </p>
         )}
-      </div>
-
-      <h3>หรือซิงก์ลงแอปปฏิทินของเครื่อง</h3>
-      <div className="form">
-        <p className="muted small">
-          ไม่ต้องใช้ server: ซิงก์ลงแอปปฏิทินของเครื่อง เมื่อเปิดสวิตช์ “แจ้งเตือนอัตโนมัติ” ไว้ ไฟล์จะมีสรุปรายวันตามเวลา/จำนวนวันที่ตั้ง เป็นอีเวนต์เตือนในปฏิทินเครื่อง
-        </p>
-        <div className="row">
-          <button className="primary" onClick={onExportCalendar}>
-            📅 ซิงก์ลงปฏิทินเครื่อง
-          </button>
-        </div>
-        <p className="muted small">
-          ส่งงานตั้งแต่วันนี้เป็นต้นไป + รายการเตือนที่ตั้งไว้ (ถ้าปิดสวิตช์แจ้งเตือนอัตโนมัติ จะเตือนทีละกลุ่ม 09:00 วันก่อนและ 08:00 วันนั้นแทน) · ต้องซิงก์ใหม่เมื่อมีงานเพิ่ม/แก้ไข ·{' '}
-          {platform === 'ios'
-            ? 'iPhone จะขึ้นหน้าต่าง “เพิ่มทั้งหมด” ของแอปปฏิทิน กดยืนยัน 1 ครั้ง (iOS ไม่ให้เว็บเพิ่มลงปฏิทินเองโดยไม่ถาม) ต้องเปิดจาก Safari ถ้าเปิดจากแอปบนหน้าจอโฮมแล้วไม่ขึ้น ให้เปิดเว็บใน Safari'
-            : 'จะดาวน์โหลดไฟล์ .ics แล้วเปิดไฟล์นั้นเพื่อนำเข้า Google/Outlook/Apple Calendar'}
-          {' '}· กดซ้ำเมื่อข้อมูลเปลี่ยนเพื่ออัปเดต โดยปกติอีเวนต์เดิมจะถูกอัปเดตไม่ซ้ำ แต่งานที่ลบไปแล้วจะไม่ถูกลบออกจากปฏิทินให้
-        </p>
       </div>
 
       <h3>เตือนเฉพาะรายการ</h3>
