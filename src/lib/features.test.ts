@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { applyFilters, EMPTY, NO_FILTERS, uniqueValues } from './filters'
 import { buildGroups } from './group'
 import { parseBackup, toBackup, toCSV, toICS, toRows, foldLine, fmtExportDate } from './exporters'
-import { addDays, dailyDigest, dueReminders, localDateTime, shouldFireDigest } from './reminders'
+import { addDays, dailyDigest, digestToFire, dueReminders, localDateTime, shouldFireDigest } from './reminders'
 import { autoMap, buildShipments } from './mapping'
 import { availableFields, effectiveGroupBy, groupOptions } from './available'
 import type { Shipment } from '../types'
@@ -221,5 +221,47 @@ describe('ics updates', () => {
     // same UID both times, so the calendar treats it as the same event
     const uid = (s: string) => s.match(/UID:(.*)\r\n/)![1]
     expect(uid(early)).toBe(uid(late))
+  })
+})
+
+describe('daily digest scheduling', () => {
+  const notify = { enabled: true, time: '08:00', today: true, daysAhead: 1, sound: false }
+  const at = new Date(2026, 9, 14, 9, 0)
+  const tomorrow = [make({ id: '1', date: '2026-10-15' })]
+  it('fires for tomorrow\'s work once the set time has passed', () => {
+    expect(digestToFire(tomorrow, at, notify, null)?.body).toBe('พรุ่งนี้ 1 รายการ (ยังไม่จัดรถ 1)')
+  })
+  it('is silent before the time, when disabled, or once already sent today', () => {
+    expect(digestToFire(tomorrow, new Date(2026, 9, 14, 7, 0), notify, null)).toBeNull()
+    expect(digestToFire(tomorrow, at, { ...notify, enabled: false }, null)).toBeNull()
+    expect(digestToFire(tomorrow, at, notify, '2026-10-14')).toBeNull()
+  })
+  it('does not use up the day while there is nothing to announce', () => {
+    // nothing yet -> null, and the caller must not record the day...
+    expect(digestToFire([], at, notify, null)).toBeNull()
+    // ...so work that arrives later the same day is still announced
+    expect(digestToFire(tomorrow, new Date(2026, 9, 14, 15, 0), notify, null)).not.toBeNull()
+  })
+})
+
+describe('ics daily digest events', () => {
+  const now = new Date(2026, 9, 14, 9, 0)
+  const rows = [make({ id: '1', date: '2026-10-15' }), make({ id: '2', date: '2026-10-15', so: 'SO2' }), make({ id: '3', date: '2026-10-17' })]
+  const digest = { shipments: rows, time: '08:00', today: true, daysAhead: 1 }
+  const ics = toICS(buildGroups(rows, 'customer'), now, [], digest)
+  it('adds one alerting event per day that has something to announce, at the set time', () => {
+    expect(ics).toContain('UID:digest-2026-10-15@transport-calendar')
+    expect(ics).toContain('DTSTART:20261015T080000')
+    expect(ics).toContain('SUMMARY:📅 แผนขนส่ง: วันนี้ 2')
+  })
+  it('skips moments that already passed and days with nothing in the window', () => {
+    expect(ics).not.toContain('UID:digest-2026-10-14@') // 08:00 today is before "now" (09:00)
+    expect(ics).toContain('UID:digest-2026-10-16@') // 16th announces tomorrow (17th)
+    expect(ics).not.toContain('UID:digest-2026-10-13@')
+  })
+  it('mutes the per-group alarms when digests are on, keeps them otherwise', () => {
+    expect(ics).not.toContain('TRIGGER:-PT15H')
+    expect(toICS(buildGroups(rows, 'customer'), now)).toContain('TRIGGER:-PT15H')
+    expect((ics.match(/TRIGGER:PT0S/g) ?? []).length).toBe((ics.match(/UID:digest-/g) ?? []).length)
   })
 })

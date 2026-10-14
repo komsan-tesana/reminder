@@ -62,6 +62,17 @@ export function dueReminders(reminders: Reminder[], now: Date): Reminder[] {
   return reminders.filter((r) => !r.done && !r.firedAt && r.at <= t)
 }
 
+/**
+ * The digest to show right now, or null. Pure so the "when" can be tested: it is null before the
+ * set time, once today's digest has gone out, and when there is nothing in the window yet. The
+ * caller must only record the day as done when this returns a digest, otherwise work added later
+ * the same day would never be announced.
+ */
+export function digestToFire(shipments: Shipment[], now: Date, notify: NotifySettings, lastFiredDate: string | null): Digest | null {
+  if (!shouldFireDigest(notify, now, lastFiredDate)) return null
+  return dailyDigest(shipments, now, notify)
+}
+
 /** True once per day, after the configured HH:mm. */
 export function shouldFireDigest(notify: NotifySettings, now: Date, lastFiredDate: string | null): boolean {
   return notify.enabled && localTime(now) >= notify.time && lastFiredDate !== localDate(now)
