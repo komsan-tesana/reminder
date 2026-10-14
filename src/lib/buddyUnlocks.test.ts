@@ -179,7 +179,7 @@ describe('buddy: what unlocks when', () => {
 
   it('has the planned number of items', () => {
     const n = (k: string) => ITEMS.filter((i) => i.kind === k).length
-    expect([n('skin'), n('outfit'), n('move'), n('toy')]).toEqual([6, 18, 6, 14]) // 13 toys + "no toy"
+    expect([n('skin'), n('outfit'), n('move'), n('toy')]).toEqual([6, 28, 6, 14]) // 13 toys + "no toy"
   })
 
   it('unlocks the easy items on first use', () => {
@@ -189,6 +189,16 @@ describe('buddy: what unlocks when', () => {
       ['pencil', { filterUses: 9 }, { filterUses: 10 }],
       ['bell', { assigned: 19 }, { assigned: 20 }],
       ['bowtie', { backupDays: 0 }, { backupDays: 1 }],
+      ['headphones', { nightVisits: 0 }, { nightVisits: 1 }],
+      ['starclip', { perfectDays: 0 }, { perfectDays: 1 }],
+      ['eartag', { exports: 2 }, { exports: 3 }],
+      ['earplaster', { edits: 19 }, { edits: 20 }],
+      ['earflower', { totalDays: 11 }, { totalDays: 12 }],
+      ['earmuffs', { bestStreak: 6 }, { bestStreak: 7 }],
+      ['hairclip', { remindersDone: 14 }, { remindersDone: 15 }],
+      ['hoop', { edits: 59 }, { edits: 60 }],
+      ['earribbon', { assigned: 49 }, { assigned: 50 }],
+      ['earcuff', { filterUses: 39 }, { filterUses: 40 }],
     ]
     for (const [id, below, enough] of cases) {
       expect(isUnlocked(itemById(id)!, at(below), NOW), `${id} before`).toBe(false)

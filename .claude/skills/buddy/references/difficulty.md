@@ -56,16 +56,16 @@ If a new stat is needed, add a row here when you add the stat.
 
 ## 5. Registry (update it in the same change as `ITEMS`)
 
-Defaults that start unlocked (`calico`, `none`, `notoy`) are not tiered. Items counted here: 41.
+Defaults that start unlocked (`calico`, `none`, `notoy`) are not tiered. Items counted here: 51.
 
 | Tier | Items (condition) |
 |---|---|
-| **ง่าย** (9) | `cap` 3-day streak · `hardhat` first import · `glasses` 3 reminders · `roll` 3 days opened · `bowtie` first backup (.json) · `bell` 20 rows assigned · `catnip` first reminder ticked · `treat` first export · `pencil` 10 filter uses |
-| **ปานกลาง** (11) | `orange` 7 days opened · `grey` 10 reminders · `zoom` 5 night visits · `krathong` open the app in November · `mouse` 30 customers · `pompom` 80 rows in a day · `feather` 15 exports · `receipt` 500 SO · `can` 5 backup days · `magnifier` 150 filter uses · `fishbone` 4 months of data |
+| **ง่าย** (13) | `cap` 3-day streak · `hardhat` first import · `glasses` 3 reminders · `roll` 3 days opened · `bowtie` first backup (.json) · `bell` 20 rows assigned · `catnip` first reminder ticked · `treat` first export · `pencil` 10 filter uses · `headphones` first night visit · `starclip` first perfect day · `eartag` 3 exports · `earplaster` 20 rows edited |
+| **ปานกลาง** (17) | `orange` 7 days opened · `grey` 10 reminders · `zoom` 5 night visits · `krathong` open the app in November · `mouse` 30 customers · `pompom` 80 rows in a day · `feather` 15 exports · `receipt` 500 SO · `can` 5 backup days · `magnifier` 150 filter uses · `fishbone` 4 months of data · `earflower` 12 days opened · `earmuffs` 7-day streak · `hairclip` 15 reminders · `hoop` 60 rows edited · `earribbon` 50 rows assigned · `earcuff` 40 filter uses |
 | **ยาก** (11) | `black` 14-day streak · `scarf` 1,500 pokes · `stretch` 1,000 pokes · `groom` 250 wakes · `nightcap` 10 night visits · `ninja` 14 perfect days · `party` open 30 Dec–2 Jan · `songkran` open 13–15 Apr · `mackerel` 8,000 new rows · `key` 150 rows assigned · `yarn` 200 rows edited |
 | **ยากมาก** (10) | `tail` 2,500 pokes · `tuxedo` 3,000 pokes · `crown` 5,000 pokes · `medal` 10,000 pokes · `vest` 100 reminders · `tie` 30 imports · `stand` 30-day streak · `halloween` 31 Oct + poke · `christmas` 24–25 Dec + poke · `gold` everything else |
 
-Balance now: 9 / 11 / 11 / 10 (ง่าย+ปานกลาง = 49%, ยากมาก = 24%). The easy tier covers the basic actions (import, export, backup, reminder, assign a truck, filter, open the app); free easy ideas left: a sleep mask (10 wake-ups), headphones (first night visit 00:00–05:00), a star sticker (first perfect day).
+Balance now: 13 / 17 / 11 / 10 (ง่าย+ปานกลาง = 59%, ยากมาก = 20%). The ear set (outfits on the ears, generated from `EARS` in `buddySprite.ts`) is headphones, starclip, eartag, earplaster, earflower, earmuffs, hairclip, hoop, earribbon, earcuff. The easy tier covers the basic actions (import, export, backup, reminder, assign a truck, filter, open the app); free easy ideas left: a sleep mask (10 wake-ups).
 
 Known soft spots (thresholds depend on the user's data, not on time): `mouse`, `pompom`, `receipt`, `fishbone`, `mackerel` can unlock in the first minutes for someone who imports a big real ERP file; that is accepted, the demo data cannot unlock them.
 
