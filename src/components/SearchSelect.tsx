@@ -1,3 +1,4 @@
+import * as Popover from '@radix-ui/react-popover'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 export type Option = { value: string; label: string }
@@ -23,15 +24,6 @@ export default function SearchSelect({ title, value, options, onChange }: Props)
     const q = query.trim().toLowerCase()
     return q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options
   }, [options, query])
-
-  useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => {
-      if (!root.current?.contains(e.target as Node)) close()
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [open])
 
   useEffect(() => {
     list.current?.children[active]?.scrollIntoView({ block: 'nearest' })
@@ -70,45 +62,60 @@ export default function SearchSelect({ title, value, options, onChange }: Props)
   const display = current ? `${title}: ${current.label}` : title
 
   return (
-    <div className={`ss ${value ? 'on' : ''}`} ref={root}>
-      <input
-        role="combobox"
-        aria-expanded={open}
-        aria-label={title}
-        value={open ? query : display}
-        placeholder={open ? `ค้นหา${title}…` : undefined}
-        onFocus={openList}
-        onClick={() => !open && openList()}
-        onChange={(e) => {
-          setQuery(e.target.value)
-          setActive(0)
-          setOpen(true)
-        }}
-        onKeyDown={onKey}
-      />
-      <span className="ss-caret" aria-hidden>
-        ▾
-      </span>
-      {open && (
-        <ul className="ss-list" role="listbox" ref={list}>
-          {shown.map((o, i) => (
-            <li
-              key={o.value}
-              role="option"
-              aria-selected={o.value === value}
-              className={i === active ? 'active' : ''}
-              onMouseEnter={() => setActive(i)}
-              onMouseDown={(e) => {
-                e.preventDefault()
-                pick(o)
-              }}
-            >
-              {o.label}
-            </li>
-          ))}
-          {shown.length === 0 && <li className="muted">ไม่พบ “{query}”</li>}
-        </ul>
-      )}
-    </div>
+    <Popover.Root open={open}>
+      <Popover.Anchor asChild>
+        <div className={`ss ${value ? 'on' : ''}`} ref={root}>
+          <input
+            role="combobox"
+            aria-expanded={open}
+            aria-label={title}
+            value={open ? query : display}
+            placeholder={open ? `ค้นหา${title}…` : undefined}
+            onFocus={openList}
+            onClick={() => !open && openList()}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setActive(0)
+              setOpen(true)
+            }}
+            onKeyDown={onKey}
+          />
+          <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-[11px] text-muted" aria-hidden>
+            ▾
+          </span>
+        </div>
+      </Popover.Anchor>
+      <Popover.Portal>
+        {/* focus stays in the input: the list is only a popup, not a focus scope */}
+        <Popover.Content
+          align="start"
+          sideOffset={2}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          onEscapeKeyDown={close}
+          onInteractOutside={(e) => (root.current?.contains(e.target as Node) ? e.preventDefault() : close())}
+          className="z-40 max-h-[260px] w-max max-w-[320px] min-w-(--radix-popover-trigger-width) overflow-auto rounded-lg border border-line bg-card p-1 text-ink shadow-xl outline-none"
+        >
+          <ul className="m-0 list-none p-0" role="listbox" ref={list}>
+            {shown.map((o, i) => (
+              <li
+                key={o.value}
+                role="option"
+                aria-selected={o.value === value}
+                className={`cursor-pointer rounded-[5px] px-2 py-1.5 aria-selected:font-semibold ${i === active ? 'bg-accent/20' : ''}`}
+                onMouseEnter={() => setActive(i)}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  pick(o)
+                }}
+              >
+                {o.label}
+              </li>
+            ))}
+            {shown.length === 0 && <li className="px-2 py-1.5 text-muted">ไม่พบ “{query}”</li>}
+          </ul>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   )
 }

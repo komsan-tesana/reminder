@@ -1,3 +1,16 @@
+/* Tailwind v4 without its preflight reset: only the theme tokens and utilities are imported, so the existing
+   hand-written rules below keep working. Those rules are unlayered and therefore beat utility classes on the
+   same property: restyle an element with utilities only after removing its old rule. */
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@theme inline {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+}
 :root {
   --bg: #f3ead9;
   --card: #faf5ea;
@@ -106,10 +119,6 @@ th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: lef
 th { position: sticky; top: 0; background: var(--bg); z-index: 1; white-space: nowrap; }
 td .clip, td.clip { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.modal-backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / 0.45); display: grid; place-items: center; z-index: 50; padding: 16px; }
-.modal { background: var(--card); border-radius: 12px; padding: 16px; width: min(900px, 100%); max-height: 92vh; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
-.modal > header { display: flex; justify-content: space-between; align-items: center; }
-.modal footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .drop { margin: 12px 0; border: 2px dashed var(--line); border-radius: 10px; padding: 48px 16px; text-align: center; color: var(--muted); cursor: pointer; }
 .drop:hover { border-color: var(--accent); }
 .mapgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 14px; }
@@ -133,8 +142,6 @@ td .clip, td.clip { max-width: 260px; overflow: hidden; text-overflow: ellipsis;
 .banner { display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: color-mix(in srgb, var(--accent) 14%, var(--card)); border-bottom: 1px solid var(--line); }
 .banner > span { flex: 1; }
 .badge { display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; border-radius: 999px; background: var(--pending); color: #fff; font-size: 11px; text-align: center; }
-.toasts { position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex; flex-direction: column; gap: 8px; max-width: min(360px, calc(100vw - 32px)); }
-.toast { display: flex; gap: 8px; justify-content: space-between; align-items: flex-start; background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 10px 12px; box-shadow: 0 6px 20px rgb(0 0 0 / 0.2); }
 .form { display: flex; flex-direction: column; gap: 10px; }
 .form label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
 .form label.row, .row { display: flex; flex-direction: row; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
@@ -154,7 +161,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   .topbar { gap: 8px; padding: 8px 12px; }
   .filterbar { padding: 8px 12px; }
   .filterbar select { flex: 1 1 130px; max-width: none; }
-  .toasts { left: 16px; }
 }
 .panel table { min-width: 760px; }
 .panel td { word-break: break-word; }
@@ -163,11 +169,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .ss { position: relative; flex: 0 1 170px; min-width: 120px; }
 .ss input { width: 100%; padding-right: 22px; cursor: pointer; text-overflow: ellipsis; }
 .ss.on input { border-color: var(--accent); font-weight: 600; }
-.ss-caret { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--muted); font-size: 11px; }
-.ss-list { position: absolute; z-index: 40; top: calc(100% + 2px); left: 0; min-width: 100%; width: max-content; max-width: 320px; max-height: 260px; overflow: auto; margin: 0; padding: 4px; list-style: none; background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.25); }
-.ss-list li { padding: 6px 8px; border-radius: 5px; cursor: pointer; }
-.ss-list li.active { background: color-mix(in srgb, var(--accent) 18%, transparent); }
-.ss-list li[aria-selected='true'] { font-weight: 600; }
 
 /* status colour settings */
 .fc-event.tone-none { background: var(--accent-fill); }
@@ -181,7 +182,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .filterbar .ss { flex: 0 1 180px; }
 @media (max-width: 820px) { .filterbar .ss { flex: 1 1 130px; } }
 
-.toast > div > div { white-space: pre-line; }
 .banner > span { white-space: pre-line; }
 .banner-days { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .banner-days button { padding: 3px 10px; border-radius: 999px; font-size: 13px; }
