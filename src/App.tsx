@@ -223,18 +223,17 @@ export default function App() {
   }
 
   /** Upcoming work plus pending reminders as an .ics the phone's Calendar app will alert from. */
-  async function exportCalendar() {
+  function exportCalendar() {
     const today = localDate(new Date())
     const upcoming = shipments.filter((s) => s.date >= today)
     const ics = toICS(buildGroups(upcoming, groupBy), new Date(), reminders)
-    const result = await syncToDeviceCalendar(ics, `transport-${today.replace(/-/g, '')}.ics`)
-    if (result === 'cancelled') return
+    const result = syncToDeviceCalendar(ics, `transport-${today.replace(/-/g, '')}.ics`)
     const n = reminders.filter((r) => !r.done).length
     push({
       title: 'ซิงก์ปฏิทิน',
       body:
-        result === 'shared'
-          ? `ส่ง ${upcoming.length} รายการ + เตือน ${n} รายการ ไปที่หน้าต่างแชร์แล้ว เลือก “ปฏิทิน” แล้วยืนยัน`
+        result === 'opened'
+          ? `เปิดหน้าต่างเพิ่มลงปฏิทินแล้ว (${upcoming.length} รายการ + เตือน ${n}) กด “เพิ่มทั้งหมด” เพื่อยืนยัน`
           : `ดาวน์โหลดไฟล์ปฏิทินแล้ว (${upcoming.length} รายการ + เตือน ${n}) เปิดไฟล์เพื่อเพิ่มลงปฏิทิน`,
     })
   }

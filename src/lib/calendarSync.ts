@@ -1,27 +1,31 @@
 import { download } from './download'
 import { currentPlatform } from './platform'
 
-export type SyncResult = 'shared' | 'downloaded' | 'cancelled'
+export type SyncResult = 'opened' | 'downloaded'
 
 /**
- * One-tap hand-off of an .ics to the device calendar.
- *
- * Browsers cannot write to a calendar directly, so on phones we open the system share sheet with
- * the file (it offers Calendar, and the user confirms once instead of hunting for a download).
- * Desktop, or any browser that cannot share files, falls back to a normal download.
- * Must be called straight from a click: share() needs the user gesture.
+ * Safari on iPhone hands a `data:text/calendar` link straight to the Calendar app, which shows its
+ * own "Add All events" sheet. (The share sheet has no Calendar target for .ics files, and blob: URLs
+ * only show the text, so a data: URI is the form that works.)
  */
-export async function syncToDeviceCalendar(ics: string, filename: string): Promise<SyncResult> {
-  const file = new File([ics], filename, { type: 'text/calendar' })
-  const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean }
-  if (currentPlatform() !== 'desktop' && typeof nav.share === 'function' && nav.canShare?.({ files: [file] })) {
-    try {
-      await nav.share({ files: [file], title: 'Transport Calendar' })
-      return 'shared'
-    } catch (e) {
-      if (e instanceof DOMException && e.name === 'AbortError') return 'cancelled'
-      // share failed for another reason: fall through to a plain download
-    }
+export const icsDataUri = (ics: string) => 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics)
+
+/**
+ * One-tap hand-off of an .ics to the device calendar. Browsers cannot write to a calendar
+ * themselves; the OS always asks the user to confirm. iPhone: opens the Calendar import sheet.
+ * Everything else: downloads the file (opening it then imports it into the default calendar app).
+ * Call straight from a click.
+ */
+export function syncToDeviceCalendar(ics: string, filename: string): SyncResult {
+  if (currentPlatform() === 'ios') {
+    const a = document.createElement('a')
+    a.href = icsDataUri(ics)
+    a.rel = 'noopener'
+    // attached to the page first: Safari ignores clicks on detached links
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    return 'opened'
   }
   download(new Blob([ics], { type: 'text/calendar;charset=utf-8' }), filename)
   return 'downloaded'
