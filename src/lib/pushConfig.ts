@@ -3,9 +3,9 @@
 // While they are empty the "push to a locked phone" option stays hidden/disabled.
 
 /** e.g. 'https://transport-calendar-push.<your-subdomain>.workers.dev' (no trailing slash) */
-export const PUSH_SERVER_URL = ''
+export const PUSH_SERVER_URL = 'https://transport-calendar-push.benaza009.workers.dev'
 
 /** printed by `node worker/scripts/gen-vapid.mjs` */
-export const VAPID_PUBLIC_KEY = ''
+export const VAPID_PUBLIC_KEY = 'BGh_lyVHr8pblUGEcWIgDBsF_RjhQTtbLVF2-xXgXvzaE67u_MbKWdcjkKw7pHm-jaz3J7X8MsxMSdPp_wT-I-Y'
 
 export const pushConfigured = () => PUSH_SERVER_URL !== '' && VAPID_PUBLIC_KEY !== ''
