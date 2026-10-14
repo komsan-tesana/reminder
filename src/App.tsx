@@ -20,6 +20,8 @@ import { makeSample } from './lib/sample'
 import { systemNotify, useReminderEngine } from './lib/useReminderEngine'
 import { buildPushPlan } from './lib/pushPlan'
 import { disablePush, enablePush, pushState, syncPush, testPush, type PushState } from './lib/push'
+import { digestPushAction, shouldAutoSubscribe } from './lib/pushStatus'
+import type { PushPlan } from './lib/pushPlan'
 import type { Filters, NotifySettings, Reminder, Shipment } from './types'
 
 // rarely used dialogs are loaded on demand to keep the first load small
@@ -109,9 +111,10 @@ export default function App() {
   const planRef = useRef(pushPlan)
   planRef.current = pushPlan
 
-  const doPushSync = useCallback(async () => {
+  // `override` lets a caller sync a plan built from settings that React has not rendered yet
+  const doPushSync = useCallback(async (override?: PushPlan) => {
     try {
-      const n = await syncPush(planRef.current)
+      const n = await syncPush(override ?? planRef.current)
       setPushMsg(`ซิงก์ล่าสุด ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} · ปลุกตามเวลา ${n} ครั้งข้างหน้า`)
     } catch (e) {
       setPushMsg(`ซิงก์ไม่สำเร็จ: ${e instanceof Error ? e.message : e} (จะลองใหม่เมื่อข้อมูลเปลี่ยนหรือเปิดแอปอีกครั้ง)`)
@@ -121,7 +124,7 @@ export default function App() {
   // keep the server's wake-up times in step with the data: after changes, and when the app comes back
   useEffect(() => {
     if (!loaded || pushSt !== 'on') return
-    const t = setTimeout(doPushSync, 3000)
+    const t = setTimeout(() => void doPushSync(), 3000)
     return () => clearTimeout(t)
   }, [loaded, pushSt, pushPlan, doPushSync])
   useEffect(() => {
@@ -131,18 +134,24 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [pushSt, doPushSync])
 
-  async function togglePush(on: boolean) {
+  // Push is not a separate setting: it follows the "daily summary" switch. Turning it on asks for
+  // permission and subscribes (this runs inside the click, which iOS requires for the prompt);
+  // turning it off unsubscribes. The in-app summary works either way.
+  async function toggleDigest(on: boolean) {
+    const notify = { ...settings.notify, enabled: on }
+    update({ notify })
+    const action = digestPushAction(pushSt, on)
+    if (action === 'none') return
     setPushBusy(true)
     setPushMsg('')
     try {
-      if (on) {
+      if (action === 'subscribe') {
         await enablePush()
         setPushSt(await pushState())
-        await doPushSync()
+        await doPushSync(buildPushPlan(shipments, reminders, notify, new Date()))
       } else {
         await disablePush()
         setPushSt(await pushState())
-        setPushMsg('ปิด Push แล้ว')
       }
     } catch (e) {
       setPushSt(await pushState())
@@ -151,17 +160,17 @@ export default function App() {
       setPushBusy(false)
     }
   }
-  async function pushTest() {
-    setPushBusy(true)
-    try {
-      await testPush(planRef.current)
-      setPushMsg('ส่งคำสั่งทดสอบแล้ว ล็อกจอแล้วรอประมาณ 2 นาที จะมีแจ้งเตือน “ทดสอบ Push”')
-    } catch (e) {
-      setPushMsg(`ทดสอบไม่สำเร็จ: ${e instanceof Error ? e.message : e}`)
-    } finally {
-      setPushBusy(false)
-    }
-  }
+
+  // someone who switched the summary on before push existed: subscribe quietly, but only when the
+  // browser already allows notifications, so nothing is ever prompted without a click
+  useEffect(() => {
+    if (!loaded) return
+    const perm = typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
+    if (!shouldAutoSubscribe(settings.notify.enabled, pushSt, perm)) return
+    enablePush()
+      .then(async () => setPushSt(await pushState()))
+      .catch(() => {})
+  }, [loaded, pushSt, settings.notify.enabled])
 
   useReminderEngine({ ready: loaded, shipments, reminders, notify: settings.notify, push, markFired })
 
@@ -281,12 +290,21 @@ export default function App() {
     setReminders(await db.reminders.toArray())
   }
 
-  function testNotify() {
+  async function testNotify() {
     const d = dailyDigest(shipments, new Date(), settings.notify)
     const m = d ?? { title: 'ทดสอบการแจ้งเตือน', body: 'ไม่มีงานวันนี้/พรุ่งนี้ นี่คือข้อความทดสอบ' }
     void systemNotify(m)
     push(m)
     if (settings.notify.sound) void playChime()
+    // with push on, also schedule one through the server (~75 s): lock the phone and watch for it
+    if (pushSt === 'on') {
+      try {
+        await testPush(planRef.current)
+        setPushMsg('ส่งคำสั่งทดสอบ Push แล้ว ล็อกจอแล้วรอประมาณ 2 นาที จะมีแจ้งเตือน “ทดสอบ Push”')
+      } catch (e) {
+        setPushMsg(`ทดสอบ Push ไม่สำเร็จ: ${e instanceof Error ? e.message : e}`)
+      }
+    }
   }
 
   /** Upcoming work plus pending reminders as an .ics the phone's Calendar app will alert from. */
@@ -489,8 +507,7 @@ export default function App() {
             onTest={testNotify}
             onExportCalendar={exportCalendar}
             push={{ state: pushSt, status: pushMsg, busy: pushBusy }}
-            onPushToggle={togglePush}
-            onPushTest={pushTest}
+            onDigestToggle={toggleDigest}
             onClose={() => setDialog(null)}
           />
         )}

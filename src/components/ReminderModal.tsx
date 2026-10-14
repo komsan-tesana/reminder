@@ -2,8 +2,9 @@ import { useState } from 'react'
 import Modal from './Modal'
 import { addDays, localDateTime } from '../lib/reminders'
 import { fmtDate } from '../lib/format'
-import { currentNotifyState, currentPlatform } from '../lib/platform'
+import { currentPlatform } from '../lib/platform'
 import type { PushState } from '../lib/push'
+import { describeDelivery } from '../lib/pushStatus'
 import type { Era, NotifySettings, Reminder } from '../types'
 
 export type ReminderDraft = { title: string; date: string }
@@ -17,28 +18,19 @@ type Props = {
   onAdd: (r: Reminder) => void
   onToggle: (r: Reminder) => void
   onDelete: (id: string) => void
-  onTest: () => void
+  onTest: () => void | Promise<void>
   onExportCalendar: () => void
   push: { state: PushState; status: string; busy: boolean }
-  onPushToggle: (on: boolean) => void
-  onPushTest: () => void
+  /** switching the daily summary also turns Push on/off (permission is asked inside this click) */
+  onDigestToggle: (on: boolean) => void
   onClose: () => void
 }
 
-export default function ReminderModal({ era, notify, reminders, draft, onNotify, onAdd, onToggle, onDelete, onTest, onExportCalendar, push, onPushToggle, onPushTest, onClose }: Props) {
-  const [perm, setPerm] = useState(currentNotifyState())
+export default function ReminderModal({ era, notify, reminders, draft, onNotify, onAdd, onToggle, onDelete, onTest, onExportCalendar, push, onDigestToggle, onClose }: Props) {
   const platform = currentPlatform()
   const [title, setTitle] = useState(draft?.title ?? '')
   // default: 08:00 the day before the shipment
   const [at, setAt] = useState(draft ? `${addDays(draft.date, -1)}T08:00` : localDateTime(new Date()))
-
-  async function toggleEnabled(on: boolean) {
-    if (on && perm === 'default') {
-      await Notification.requestPermission()
-      setPerm(currentNotifyState())
-    }
-    onNotify({ ...notify, enabled: on })
-  }
 
   function add() {
     if (!title.trim() || !at) return
@@ -46,6 +38,7 @@ export default function ReminderModal({ era, notify, reminders, draft, onNotify,
     setTitle('')
   }
 
+  const note = describeDelivery(notify.enabled, push.state)
   const sorted = [...reminders].sort((a, b) => a.at.localeCompare(b.at))
   const now = localDateTime(new Date())
 
@@ -54,7 +47,7 @@ export default function ReminderModal({ era, notify, reminders, draft, onNotify,
       <h3>สรุปประจำวัน</h3>
       <div className="form">
         <label className="row">
-          <input type="checkbox" checked={notify.enabled} onChange={(e) => toggleEnabled(e.target.checked)} />
+          <input type="checkbox" checked={notify.enabled} disabled={push.busy} onChange={(e) => onDigestToggle(e.target.checked)} />
           แจ้งเตือนอัตโนมัติทุกวัน สรุปงานวันนี้และล่วงหน้า แยกเป็นรายวัน
         </label>
         <div className="row">
@@ -83,48 +76,21 @@ export default function ReminderModal({ era, notify, reminders, draft, onNotify,
           </label>
           <button onClick={onTest}>ทดสอบ</button>
         </div>
-        <p className="muted small">
-          {perm === 'granted' && 'เบราว์เซอร์อนุญาตการแจ้งเตือนแล้ว'}
-          {perm === 'denied' && 'เบราว์เซอร์บล็อกการแจ้งเตือน จะแสดงเป็นข้อความในหน้านี้แทน (เปิดสิทธิ์ได้ที่ตั้งค่าของเว็บไซต์)'}
-          {perm === 'default' && 'ยังไม่ได้ขออนุญาตเบราว์เซอร์ จะขอเมื่อเปิดสวิตช์ด้านบน'}
-          {perm === 'unsupported' && 'เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน จะแสดงเป็นข้อความในหน้านี้แทน'}
-          {perm === 'ios-install' && 'บน iPhone/iPad แจ้งเตือนของเว็บใช้ได้เมื่อเพิ่มแอปลงหน้าจอโฮมก่อน: กดปุ่มแชร์ใน Safari → “เพิ่มไปยังหน้าจอโฮม” แล้วเปิดจากไอคอนนั้น (ต้อง iOS 16.4 ขึ้นไป)'}
-        </p>
-      </div>
-
-      <h3>เด้งเตือนแม้ปิดแอป/ล็อกจอ (Push)</h3>
-      <div className="form">
-        <p className="muted small">
-          การแจ้งเตือนด้านบนเด้งได้เฉพาะตอนเปิดหน้านี้ค้างไว้ ({platform === 'ios' ? 'iOS หยุดแอปทันทีที่ล็อกจอ' : 'เบราว์เซอร์อาจหยุดแท็บที่อยู่เบื้องหลัง'}) ถ้าต้องการให้เด้งเองแม้ล็อกจอ เปิด Push ด้านล่าง
-        </p>
-        {push.state === 'unconfigured' && <p className="muted small">ยังไม่ได้ตั้งค่า server สำหรับ Push (ผู้ดูแลต้อง deploy Worker และใส่ค่าใน src/lib/pushConfig.ts ตามคู่มือ worker/README.md)</p>}
-        {push.state === 'unsupported' && <p className="muted small">เบราว์เซอร์นี้ไม่รองรับ Push</p>}
-        {push.state === 'ios-install' && (
-          <p className="muted small">บน iPhone/iPad ต้องเพิ่มแอปลงหน้าจอโฮมก่อน: กดปุ่มแชร์ใน Safari → “เพิ่มไปยังหน้าจอโฮม” แล้วเปิดจากไอคอนนั้น (iOS 16.4 ขึ้นไป) จากนั้นกลับมาเปิดส่วนนี้</p>
+        {note && (
+          <p className={`muted small ${note.kind === 'warn' ? 'warn' : ''}`} role="status">
+            {note.text}
+          </p>
         )}
-        {push.state === 'denied' && <p className="muted small">เบราว์เซอร์บล็อกการแจ้งเตือนอยู่ เปิดสิทธิ์ได้ที่ตั้งค่าของเว็บไซต์/แอปนี้ แล้วกลับมาเปิดใหม่</p>}
-        {push.state === 'off' && (
-          <div className="row">
-            <button className="primary" disabled={push.busy} onClick={() => onPushToggle(true)}>
-              🔔 เปิดแจ้งเตือนแบบ Push
-            </button>
-          </div>
+        {push.status && (
+          <p className="muted small" role="status">
+            {push.status}
+          </p>
         )}
-        {push.state === 'on' && (
-          <div className="row">
-            <span>✅ เปิดอยู่</span>
-            <button disabled={push.busy} onClick={onPushTest}>
-              ทดสอบ (ล็อกจอแล้วรอ ~2 นาที)
-            </button>
-            <button disabled={push.busy} onClick={() => onPushToggle(false)}>
-              ปิด
-            </button>
-          </div>
+        {notify.enabled && push.state === 'on' && (
+          <p className="muted small">
+            ความเป็นส่วนตัว: ส่งไปที่ server เฉพาะที่อยู่ปลายทางของเครื่องนี้กับ “เวลาที่ต้องปลุก” เท่านั้น ไม่มีชื่อลูกค้า เลข SO หรือข้อความแจ้งเตือน ตัวข้อความอยู่ในเครื่องแล้วประกอบเองตอนถูกปลุก · ปุ่ม “ทดสอบ” จะส่งทั้งในแอปและ Push (ล็อกจอแล้วรอ ~2 นาที) · ถ้าซิงก์ปฏิทินเครื่องด้านล่างด้วย อาจเตือนซ้ำสองทาง
+          </p>
         )}
-        {push.status && <p className="muted small" role="status">{push.status}</p>}
-        <p className="muted small">
-          ความเป็นส่วนตัว: ส่งไปที่ server เฉพาะที่อยู่ปลายทางของเครื่องนี้กับ “เวลาที่ต้องปลุก” เท่านั้น ไม่มีชื่อลูกค้า เลข SO หรือข้อความแจ้งเตือน ตัวข้อความอยู่ในเครื่องแล้วประกอบเองตอนถูกปลุก · ใช้ร่วมกับ “แจ้งเตือนอัตโนมัติทุกวัน” ด้านบนและรายการเตือน ถ้าซิงก์ปฏิทินเครื่องด้วย อาจเตือนซ้ำสองทาง
-        </p>
       </div>
 
       <h3>หรือซิงก์ลงแอปปฏิทินของเครื่อง</h3>
@@ -148,6 +114,7 @@ export default function ReminderModal({ era, notify, reminders, draft, onNotify,
 
       <h3>เตือนเฉพาะรายการ</h3>
       <div className="form">
+        <p className="muted small">รายการเตือนจะเด้งแม้ล็อกจอเมื่อเปิด “แจ้งเตือนอัตโนมัติ” ด้านบน (Push) ถ้าปิดสวิตช์ จะเตือนเฉพาะตอนเปิดแอปค้างไว้</p>
         <div className="row">
           <label className="grow">
             ข้อความ

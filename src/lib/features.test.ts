@@ -324,3 +324,34 @@ describe('push config', () => {
     expect(isPushConfigured('https://x.workers.dev', 'BKEY')).toBe(true)
   })
 })
+
+describe('daily summary drives push', () => {
+  it('subscribes when switched on, unsubscribes when switched off, otherwise leaves it alone', async () => {
+    const { digestPushAction } = await import('./pushStatus')
+    expect(digestPushAction('off', true)).toBe('subscribe')
+    expect(digestPushAction('on', true)).toBe('none') // already subscribed
+    for (const s of ['denied', 'ios-install', 'unsupported', 'unconfigured'] as const) expect(digestPushAction(s, true)).toBe('none')
+    expect(digestPushAction('on', false)).toBe('unsubscribe')
+    for (const s of ['off', 'denied', 'ios-install', 'unsupported', 'unconfigured'] as const) expect(digestPushAction(s, false)).toBe('none')
+  })
+
+  it('auto-subscribes at start-up only when already allowed (never prompts without a click)', async () => {
+    const { shouldAutoSubscribe } = await import('./pushStatus')
+    expect(shouldAutoSubscribe(true, 'off', 'granted')).toBe(true)
+    expect(shouldAutoSubscribe(true, 'off', 'default')).toBe(false)
+    expect(shouldAutoSubscribe(true, 'off', 'denied')).toBe(false)
+    expect(shouldAutoSubscribe(true, 'on', 'granted')).toBe(false)
+    expect(shouldAutoSubscribe(false, 'off', 'granted')).toBe(false)
+  })
+
+  it('tells the user how the summary will reach them, in every state', async () => {
+    const { describeDelivery } = await import('./pushStatus')
+    expect(describeDelivery(false, 'on')).toBeNull() // switch off: nothing to say
+    expect(describeDelivery(true, 'on')).toMatchObject({ kind: 'ok' })
+    for (const s of ['off', 'ios-install', 'denied'] as const) expect(describeDelivery(true, s)?.kind).toBe('warn')
+    for (const s of ['unsupported', 'unconfigured'] as const) expect(describeDelivery(true, s)?.kind).toBe('info')
+    expect(describeDelivery(true, 'ios-install')?.text).toMatch(/หน้าจอโฮม/)
+    // every non-push state must say what still works
+    for (const s of ['off', 'ios-install', 'denied', 'unsupported', 'unconfigured'] as const) expect(describeDelivery(true, s)?.text).toMatch(/เปิดแอปค้างไว้/)
+  })
+})
