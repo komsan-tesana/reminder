@@ -40,6 +40,18 @@ if git rev-parse --verify -q "$REMOTE/$SOURCE_BRANCH" >/dev/null &&
   exit 1
 fi
 
+# The push relay (worker/) is deployed separately by scripts/deploy-worker.sh, never by this script.
+# Say so when the app and the Worker may be out of step (informational, never blocks a release).
+PUSH_CONFIG=${PUSH_CONFIG_FILE:-src/lib/pushConfig.ts}
+if grep -qE "^export const PUSH_SERVER_URL = ''" "$PUSH_CONFIG"; then
+  echo "ℹ Push ยังไม่ถูกตั้งค่า (pushConfig.ts ว่าง) แอปรุ่นนี้จะซ่อนปุ่ม Push เปิดใช้โดย  npm run deploy:worker -- --write-config  แล้วคอมมิต"
+else
+  last=$(git describe --tags --abbrev=0 2>/dev/null || true)
+  if [ -n "$last" ] && ! git diff --quiet "$last" -- worker; then
+    echo "ℹ worker/ เปลี่ยนไปจาก $last แต่สคริปต์นี้ไม่ได้ deploy Worker ให้ ถ้าต้องการ รัน  npm run deploy:worker"
+  fi
+fi
+
 echo "→ ติดตั้ง dependencies และ test"
 npm ci
 npm test

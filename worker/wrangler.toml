@@ -1,0 +1,23 @@
+# Cloudflare Worker that wakes subscribed phones at the times the app asks for.
+# Setup steps are in README.md. Nothing here is secret; the VAPID private key is a Wrangler secret.
+name = "transport-calendar-push"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[vars]
+# who may call the API (the GitHub Pages site and the local dev servers)
+ALLOWED_ORIGINS = "https://komsan-tesana.github.io,http://localhost:5173,http://localhost:4173"
+# VAPID_SUBJECT (your contact address) and VAPID_PRIVATE_JWK are *secrets*, not vars, so they are
+# never committed: set them with `npx wrangler secret put <NAME>` (see README.md).
+
+# Every minute. An idle run costs one KV read and no writes (see src/store.ts), so this stays well
+# inside the free plan.
+[triggers]
+crons = ["* * * * *"]
+
+# KV namespace holding one record per subscribed device (push endpoint, keys and wake-up times;
+# no shipment data) plus a small `index` key. To use another namespace:
+# `npx wrangler kv namespace create transport-calendar-push` and paste its id here.
+[[kv_namespaces]]
+binding = "KV"
+id = "fb1ea6896e5e40c09e820d2cad652841"

@@ -3,6 +3,7 @@ import Modal from './Modal'
 import { addDays, localDateTime } from '../lib/reminders'
 import { fmtDate } from '../lib/format'
 import { currentNotifyState, currentPlatform } from '../lib/platform'
+import type { PushState } from '../lib/push'
 import type { Era, NotifySettings, Reminder } from '../types'
 
 export type ReminderDraft = { title: string; date: string }
@@ -18,10 +19,13 @@ type Props = {
   onDelete: (id: string) => void
   onTest: () => void
   onExportCalendar: () => void
+  push: { state: PushState; status: string; busy: boolean }
+  onPushToggle: (on: boolean) => void
+  onPushTest: () => void
   onClose: () => void
 }
 
-export default function ReminderModal({ era, notify, reminders, draft, onNotify, onAdd, onToggle, onDelete, onTest, onExportCalendar, onClose }: Props) {
+export default function ReminderModal({ era, notify, reminders, draft, onNotify, onAdd, onToggle, onDelete, onTest, onExportCalendar, push, onPushToggle, onPushTest, onClose }: Props) {
   const [perm, setPerm] = useState(currentNotifyState())
   const platform = currentPlatform()
   const [title, setTitle] = useState(draft?.title ?? '')
@@ -88,11 +92,45 @@ export default function ReminderModal({ era, notify, reminders, draft, onNotify,
         </p>
       </div>
 
-      <h3>ให้เด้งเตือนแม้ปิดแอป/ล็อกจอ</h3>
+      <h3>เด้งเตือนแม้ปิดแอป/ล็อกจอ (Push)</h3>
       <div className="form">
         <p className="muted small">
-          การแจ้งเตือนในแอปด้านบนเด้งได้เฉพาะตอนเปิดหน้านี้ค้างไว้เท่านั้น เพราะเว็บนี้ไม่มี server ({platform === 'ios' ? 'iOS จะหยุดแอปทันทีที่ล็อกจอ' : 'เบราว์เซอร์อาจหยุดแท็บที่อยู่เบื้องหลัง'})
-          ถ้าอยากให้เด้งเอง แม้ปิดแอปหรือล็อกจอ ให้ซิงก์ลงแอปปฏิทินของเครื่อง: เมื่อเปิดสวิตช์ “แจ้งเตือนอัตโนมัติ” ไว้ ไฟล์จะมีสรุปรายวันตามเวลา/จำนวนวันที่ตั้ง เป็นอีเวนต์เตือนในปฏิทินเครื่อง
+          การแจ้งเตือนด้านบนเด้งได้เฉพาะตอนเปิดหน้านี้ค้างไว้ ({platform === 'ios' ? 'iOS หยุดแอปทันทีที่ล็อกจอ' : 'เบราว์เซอร์อาจหยุดแท็บที่อยู่เบื้องหลัง'}) ถ้าต้องการให้เด้งเองแม้ล็อกจอ เปิด Push ด้านล่าง
+        </p>
+        {push.state === 'unconfigured' && <p className="muted small">ยังไม่ได้ตั้งค่า server สำหรับ Push (ผู้ดูแลต้อง deploy Worker และใส่ค่าใน src/lib/pushConfig.ts ตามคู่มือ worker/README.md)</p>}
+        {push.state === 'unsupported' && <p className="muted small">เบราว์เซอร์นี้ไม่รองรับ Push</p>}
+        {push.state === 'ios-install' && (
+          <p className="muted small">บน iPhone/iPad ต้องเพิ่มแอปลงหน้าจอโฮมก่อน: กดปุ่มแชร์ใน Safari → “เพิ่มไปยังหน้าจอโฮม” แล้วเปิดจากไอคอนนั้น (iOS 16.4 ขึ้นไป) จากนั้นกลับมาเปิดส่วนนี้</p>
+        )}
+        {push.state === 'denied' && <p className="muted small">เบราว์เซอร์บล็อกการแจ้งเตือนอยู่ เปิดสิทธิ์ได้ที่ตั้งค่าของเว็บไซต์/แอปนี้ แล้วกลับมาเปิดใหม่</p>}
+        {push.state === 'off' && (
+          <div className="row">
+            <button className="primary" disabled={push.busy} onClick={() => onPushToggle(true)}>
+              🔔 เปิดแจ้งเตือนแบบ Push
+            </button>
+          </div>
+        )}
+        {push.state === 'on' && (
+          <div className="row">
+            <span>✅ เปิดอยู่</span>
+            <button disabled={push.busy} onClick={onPushTest}>
+              ทดสอบ (ล็อกจอแล้วรอ ~2 นาที)
+            </button>
+            <button disabled={push.busy} onClick={() => onPushToggle(false)}>
+              ปิด
+            </button>
+          </div>
+        )}
+        {push.status && <p className="muted small" role="status">{push.status}</p>}
+        <p className="muted small">
+          ความเป็นส่วนตัว: ส่งไปที่ server เฉพาะที่อยู่ปลายทางของเครื่องนี้กับ “เวลาที่ต้องปลุก” เท่านั้น ไม่มีชื่อลูกค้า เลข SO หรือข้อความแจ้งเตือน ตัวข้อความอยู่ในเครื่องแล้วประกอบเองตอนถูกปลุก · ใช้ร่วมกับ “แจ้งเตือนอัตโนมัติทุกวัน” ด้านบนและรายการเตือน ถ้าซิงก์ปฏิทินเครื่องด้วย อาจเตือนซ้ำสองทาง
+        </p>
+      </div>
+
+      <h3>หรือซิงก์ลงแอปปฏิทินของเครื่อง</h3>
+      <div className="form">
+        <p className="muted small">
+          ไม่ต้องใช้ server: ซิงก์ลงแอปปฏิทินของเครื่อง เมื่อเปิดสวิตช์ “แจ้งเตือนอัตโนมัติ” ไว้ ไฟล์จะมีสรุปรายวันตามเวลา/จำนวนวันที่ตั้ง เป็นอีเวนต์เตือนในปฏิทินเครื่อง
         </p>
         <div className="row">
           <button className="primary" onClick={onExportCalendar}>

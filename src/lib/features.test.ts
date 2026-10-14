@@ -265,3 +265,52 @@ describe('ics daily digest events', () => {
     expect((ics.match(/TRIGGER:PT0S/g) ?? []).length).toBe((ics.match(/UID:digest-/g) ?? []).length)
   })
 })
+
+describe('push plan', () => {
+  const notify = { enabled: true, time: '08:00', today: true, daysAhead: 1, sound: true }
+  const now = new Date(2026, 9, 14, 9, 0) // 14 Oct 09:00, after today's 08:00
+  const rows = [make({ id: '1', date: '2026-10-15' }), make({ id: '2', date: '2026-10-15', so: 'SO2' }), make({ id: '3', date: '2026-10-17' })]
+  const epoch = (y: number, m: number, d: number, h: number, mi: number) => Math.floor(new Date(y, m - 1, d, h, mi).getTime() / 1000)
+
+  it('plans the daily summary at the set time on each day that has something, skipping passed moments', async () => {
+    const { buildPushPlan } = await import('./pushPlan')
+    const plan = buildPushPlan(rows, [], notify, now)
+    // 14th 08:00 already passed; 15th: today's 2 rows; 16th: tomorrow's (17th) 1 row; 17th: today's 1 row
+    expect(plan.outbox.map((i) => i.id)).toEqual(['digest:2026-10-15', 'digest:2026-10-16', 'digest:2026-10-17'])
+    expect(plan.schedule).toEqual([epoch(2026, 10, 15, 8, 0), epoch(2026, 10, 16, 8, 0), epoch(2026, 10, 17, 8, 0)])
+    expect(plan.outbox[0]).toMatchObject({ title: 'แผนขนส่ง', tag: 'digest', body: 'วันนี้ 2 รายการ (ยังไม่จัดรถ 2)' })
+  })
+
+  it('includes pending reminders at their own time and skips done, fired and past ones', async () => {
+    const { buildPushPlan } = await import('./pushPlan')
+    const rems = [
+      { id: 'a', title: 'โทรยืนยันรถ', at: '2026-10-15T07:30', done: false },
+      { id: 'b', title: 'เสร็จแล้ว', at: '2026-10-15T09:00', done: true },
+      { id: 'c', title: 'เตือนไปแล้ว', at: '2026-10-15T10:00', done: false, firedAt: 1 },
+      { id: 'd', title: 'ผ่านไปแล้ว', at: '2026-10-13T10:00', done: false },
+    ]
+    const plan = buildPushPlan([], rems, { ...notify, enabled: false }, now)
+    expect(plan.outbox).toEqual([{ id: 'reminder:a', at: epoch(2026, 10, 15, 7, 30), title: 'เตือน', body: 'โทรยืนยันรถ', tag: 'reminder-a' }])
+  })
+
+  it('plans no digests when the daily summary is off, and uploads only times, never text', async () => {
+    const { buildPushPlan } = await import('./pushPlan')
+    const off = buildPushPlan(rows, [], { ...notify, enabled: false }, now)
+    expect(off.outbox).toHaveLength(0)
+    const on = buildPushPlan(rows, [], notify, now)
+    expect(on.schedule.every((n) => Number.isInteger(n))).toBe(true)
+  })
+
+  it('merges identical times and caps the list', async () => {
+    const { buildPushPlan } = await import('./pushPlan')
+    const same = [
+      { id: 'x', title: 'a', at: '2026-10-15T08:00', done: false },
+      { id: 'y', title: 'b', at: '2026-10-15T08:00', done: false },
+    ]
+    const plan = buildPushPlan([], same, { ...notify, enabled: false }, now)
+    expect(plan.outbox).toHaveLength(2)
+    expect(plan.schedule).toHaveLength(1)
+    const many = Array.from({ length: 400 }, (_, i) => ({ id: `r${i}`, title: 't', at: `2026-10-${String(15 + (i % 10)).padStart(2, '0')}T${String(i % 24).padStart(2, '0')}:00`, done: false }))
+    expect(buildPushPlan([], many, { ...notify, enabled: false }, now).outbox).toHaveLength(200)
+  })
+})
