@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import Modal from './Modal'
+import { DatePicker } from './DateTimePicker'
 import { parseDate } from '../lib/dateParse'
 import { fmtDate } from '../lib/format'
 import type { Era, Shipment } from '../types'
@@ -78,8 +79,8 @@ export default function EditModal({ rows, all, era, onSave, onClose }: Props) {
       {rows.length > 1 && <p className="muted small">ช่องที่ไม่ได้แก้จะไม่เปลี่ยน · ช่องที่แต่ละรายการค่าไม่เหมือนกันจะว่างไว้</p>}
       <div className="form">
         <label>
-          วันที่ส่ง (ค.ศ.)
-          <input type="date" value={values.date} placeholder={mixed('date') ? '(หลายค่า)' : ''} onChange={(e) => set('date', e.target.value)} />
+          วันที่ส่ง
+          <DatePicker label="วันที่ส่ง" era={era} value={values.date} placeholder={mixed('date') ? '(หลายค่า)' : 'เลือกวันที่'} onChange={(v) => set('date', v)} />
           {touched.has('date') && dateOk && values.date && (
             <span className="small muted">= {fmtDate(values.date, era, 'D MMMM YYYY')} · จะบันทึกเป็น Confirmed ship date</span>
           )}

@@ -3,6 +3,7 @@ import CalendarView from './components/CalendarView'
 import DetailPanel from './components/DetailPanel'
 import FilterBar from './components/FilterBar'
 import BottomSheet from './components/BottomSheet'
+import Select from './components/Select'
 import ResizeHandle, { EDGE_W, MAX_VH, type PanelSize } from './components/ResizeHandle'
 import { toast } from 'sonner'
 import Toasts from './components/Toasts'
@@ -483,13 +484,12 @@ export default function App() {
             {shipments.length > 0 && (
               <label className="legend-group">
                 จัดกลุ่ม
-                <select value={groupBy} onChange={(e) => update({ groupBy: e.target.value as Settings['groupBy'] })}>
-                  {groupChoices.map((g) => (
-                    <option key={g} value={g}>
-                      {GROUP_LABEL[g]}
-                    </option>
-                  ))}
-                </select>
+                <Select
+                  value={groupBy}
+                  label="จัดกลุ่ม"
+                  options={groupChoices.map((g) => ({ value: g, label: GROUP_LABEL[g] }))}
+                  onChange={(v) => update({ groupBy: v as Settings['groupBy'] })}
+                />
               </label>
             )}
           </div>

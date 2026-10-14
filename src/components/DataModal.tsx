@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import Modal from './Modal'
+import Select from './Select'
 import { buildGroups } from '../lib/group'
 import { parseBackup, toBackup, toCSV, toICS, toRows, toXlsxBlob, type DateFmt } from '../lib/exporters'
 import { download } from '../lib/download'
@@ -71,29 +72,44 @@ export default function DataModal({ all, filtered, reminders, groupBy, onRestore
         <div className="row">
           <label>
             รูปแบบ
-            <select value={format} onChange={(e) => setFormat(e.target.value as Format)}>
-              <option value="xlsx">Excel (.xlsx)</option>
-              <option value="csv">CSV</option>
-              <option value="ics">ปฏิทิน (.ics) สำหรับ Google/Outlook</option>
-              <option value="json">สำรองข้อมูล (.json)</option>
-            </select>
+            <Select
+              value={format}
+              label="รูปแบบ"
+              options={[
+                { value: 'xlsx', label: 'Excel (.xlsx)' },
+                { value: 'csv', label: 'CSV' },
+                { value: 'ics', label: 'ปฏิทิน (.ics) สำหรับ Google/Outlook' },
+                { value: 'json', label: 'สำรองข้อมูล (.json)' },
+              ]}
+              onChange={(v) => setFormat(v as Format)}
+            />
           </label>
           {format !== 'json' && (
             <label>
               ข้อมูล
-              <select value={scope} onChange={(e) => setScope(e.target.value as 'filtered' | 'all')}>
-                <option value="filtered">ตามตัวกรองปัจจุบัน ({filtered.length.toLocaleString()})</option>
-                <option value="all">ทั้งหมด ({all.length.toLocaleString()})</option>
-              </select>
+              <Select
+                value={scope}
+                label="ข้อมูล"
+                options={[
+                  { value: 'filtered', label: `ตามตัวกรองปัจจุบัน (${filtered.length.toLocaleString()})` },
+                  { value: 'all', label: `ทั้งหมด (${all.length.toLocaleString()})` },
+                ]}
+                onChange={(v) => setScope(v as 'filtered' | 'all')}
+              />
             </label>
           )}
           {usesDates && (
             <label>
               รูปแบบวันที่
-              <select value={dateFmt} onChange={(e) => setDateFmt(e.target.value as DateFmt)}>
-                <option value="CE">ค.ศ. 2026-10-12</option>
-                <option value="BE">พ.ศ. 12/10/2569</option>
-              </select>
+              <Select
+                value={dateFmt}
+                label="รูปแบบวันที่"
+                options={[
+                  { value: 'CE', label: 'ค.ศ. 2026-10-12' },
+                  { value: 'BE', label: 'พ.ศ. 12/10/2569' },
+                ]}
+                onChange={(v) => setDateFmt(v as DateFmt)}
+              />
             </label>
           )}
           <button className="primary" disabled={busy || (format !== 'json' && rows.length === 0)} onClick={doExport}>
@@ -109,10 +125,15 @@ export default function DataModal({ all, filtered, reminders, groupBy, onRestore
         <div className="row">
           <label>
             วิธีกู้คืน
-            <select value={mode} onChange={(e) => setMode(e.target.value as 'merge' | 'replace')}>
-              <option value="merge">รวมกับข้อมูลเดิม (ไฟล์สำรองทับตัวซ้ำ)</option>
-              <option value="replace">แทนที่ข้อมูลเดิมทั้งหมด</option>
-            </select>
+            <Select
+              value={mode}
+              label="วิธีกู้คืน"
+              options={[
+                { value: 'merge', label: 'รวมกับข้อมูลเดิม (ไฟล์สำรองทับตัวซ้ำ)' },
+                { value: 'replace', label: 'แทนที่ข้อมูลเดิมทั้งหมด' },
+              ]}
+              onChange={(v) => setMode(v as 'merge' | 'replace')}
+            />
           </label>
           <input ref={input} type="file" accept=".json,application/json" hidden onChange={(e) => restore(e.target.files?.[0])} />
           <button disabled={busy} onClick={() => input.current?.click()}>

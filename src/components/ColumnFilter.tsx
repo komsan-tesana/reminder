@@ -1,5 +1,6 @@
 import * as Popover from '@radix-ui/react-popover'
 import { useMemo, useState } from 'react'
+import Checkbox from './Checkbox'
 
 type Props = {
   label: string
@@ -52,7 +53,7 @@ export default function ColumnFilter({ label, values, selected, onChange }: Prop
             {shown.map((v) => (
               <li key={v}>
                 <label className="flex cursor-pointer items-start gap-2 rounded px-1 py-1 font-normal hover:bg-accent/10">
-                  <input type="checkbox" className="mt-0.5" checked={has(v)} onChange={() => toggle(v)} />
+                  <Checkbox className="mt-0.5" checked={has(v)} onChange={() => toggle(v)} />
                   <span className="min-w-0 break-words whitespace-normal">{v || BLANK}</span>
                 </label>
               </li>
