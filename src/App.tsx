@@ -8,6 +8,7 @@ import ResizeHandle, { EDGE_W, MAX_VH, type PanelSize } from './components/Resiz
 import { toast } from 'sonner'
 import Toasts from './components/Toasts'
 import Buddy from './components/Buddy'
+import PawIcon from './components/PawIcon'
 import type { ReminderDraft } from './components/ReminderModal'
 import { db, deleteShipments, editShipments, loadBuddyStats, loadPanelSize, loadSettings, saveBuddyStats, restoreBackup, savePanelSize, saveSettings, type Settings } from './lib/db'
 import { availableFields, effectiveGroupBy, groupOptions } from './lib/available'
@@ -15,7 +16,8 @@ import { applyFilters, NO_FILTERS } from './lib/filters'
 import type { Group, Tone } from './lib/group'
 import { addDays, dailyDigest, daySummary, dueReminders, localDate } from './lib/reminders'
 import type { BuddyState, WorkCtx } from './lib/buddy'
-import { newlyUnlocked, recordImport, recordPet, recordReminderDone, recordVisit, safeLook, unlockedIds, type BuddyStats } from './lib/buddyUnlocks'
+import { isShown, markSeen, newlyUnlocked, petsLeftToday, recordData, recordEdit, recordExport, recordFilterUse, recordImport, recordPerfect, recordPet, recordReminderDone, recordVisit, recordWake, safeLook, unlockedIds, unseenCount, withEarned, type BuddyStats } from './lib/buddyUnlocks'
+import { countAssigned, dataFacts, filterUseKind } from './lib/buddyData'
 import { fmtDate } from './lib/format'
 import { playChime } from './lib/sound'
 import { applyTheme, THEME_LABEL } from './lib/theme'
@@ -102,13 +104,13 @@ export default function App() {
     (fn: (s: BuddyStats) => BuddyStats) => {
       const now = new Date()
       const prev = statsRef.current
-      const next = fn(prev)
+      const next = withEarned(fn(prev), now) // what is unlocked stays unlocked
       if (next === prev) return
       statsRef.current = next
       setStats(next)
       saveBuddyStats(next)
-      for (const it of newlyUnlocked(prev, next, now))
-        push({ title: `🎉 เปี๊ยกปลดล็อก: ${it.name}`, body: it.kind === 'move' ? 'เปี๊ยกจะทำท่านี้เองตามอารมณ์ ดูได้ที่ ⚙ ตั้งค่า → ตู้เสื้อผ้าเปี๊ยก' : 'ไปใส่ได้ที่ ⚙ ตั้งค่า → ตู้เสื้อผ้าเปี๊ยก' })
+      for (const it of newlyUnlocked(prev, next, now).filter(isShown))
+        push({ title: `🎉 เปี๊ยกปลดล็อก: ${it.name}`, body: it.kind === 'move' ? 'เปี๊ยกจะทำท่านี้เองตามอารมณ์ ดูได้ที่ปุ่มอุ้งเท้า 🐾 ที่แถบบน' : 'ไปใส่ได้ที่ปุ่มอุ้งเท้า 🐾 ที่แถบบน' })
     },
     [push],
   )
@@ -258,8 +260,8 @@ export default function App() {
   const isDark = settings.theme === 'dark' || (settings.theme === 'system' && osDark)
   const updateNotify = (notify: NotifySettings) => update({ notify })
 
-  async function afterImport(items: Shipment[], kept: number, removed: number) {
-    bump(recordImport)
+  async function afterImport(items: Shipment[], kept: number, removed: number, added: number) {
+    bump((s) => recordImport(s, added))
     setShipments(await db.shipments.toArray())
     setFocusDate(nearestDate(items))
     setSelection(null)
@@ -271,6 +273,7 @@ export default function App() {
   async function saveEdit(patch: Partial<Shipment>) {
     if (!editing) return
     const updated = await editShipments(editing.map((r) => r.id), patch)
+    bump((s) => recordEdit(s, editing.length, countAssigned(editing, updated)))
     const byId = new Map(updated.map((u) => [u.id, u]))
     setShipments((all) => all.map((s) => byId.get(s.id) ?? s))
     // follow the rows if the date moved
@@ -281,13 +284,37 @@ export default function App() {
   // On a phone the sheet gets a history entry, so the Back button / swipe-back closes it instead of leaving the app
   const sheetOpen = stacked && !!selection
   // what the cat jokes about; computed here from local data and never leaves the device
-  const look = safeLook(settings.buddy.skin, settings.buddy.outfit, stats, new Date())
+  const unseen = unseenCount(stats)
+  const look = safeLook(settings.buddy.skin, settings.buddy.outfit, settings.buddy.toy, stats, new Date())
   const moves = useMemo(() => unlockedIds('move', stats, new Date()) as BuddyState[], [stats])
   const buddyCtx = useMemo<WorkCtx>(() => {
     const t = localDate(new Date())
     const today = daySummary(shipments, t)
     return { today: today.total, unassigned: today.unassigned, tomorrow: daySummary(shipments, addDays(t, 1)).total, pending: countPendingReminders(reminders) }
   }, [shipments, reminders])
+  // a day with work where nothing is left to assign counts toward the "perfect days" unlocks
+  useEffect(() => {
+    if (loaded && buddyCtx.today > 0 && buddyCtx.unassigned === 0) bump((s) => recordPerfect(s, new Date()))
+  }, [loaded, buddyCtx, bump])
+  // how big the data has ever been (distinct customers / SO / busiest day / months); only the counts are kept
+  const facts = useMemo(() => dataFacts(shipments), [shipments])
+  useEffect(() => {
+    if (loaded) bump((s) => recordData(s, facts))
+  }, [loaded, facts, bump])
+  // using the filter bar counts toward the magnifier: a dropdown pick at once, a search once typing stops
+  const prevFilters = useRef(filters)
+  useEffect(() => {
+    const kind = filterUseKind(prevFilters.current, filters)
+    prevFilters.current = filters
+    if (kind === 'pick') bump((s) => recordFilterUse(s, new Date()))
+    if (kind !== 'search') return
+    const t = window.setTimeout(() => bump((s) => recordFilterUse(s, new Date())), 1000)
+    return () => window.clearTimeout(t)
+  }, [filters, bump])
+  // opening the wardrobe means the new items have been seen
+  useEffect(() => {
+    if (dialog === 'buddy') bump(markSeen)
+  }, [dialog, bump])
   useEffect(() => {
     if (!sheetOpen) return
     history.pushState({ sheet: 1 }, '')
@@ -446,6 +473,15 @@ export default function App() {
         <button onClick={() => setDialog('settings')} aria-label="ตั้งค่าการแสดงผล" title="ตั้งค่าการแสดงผล">
           ⚙
         </button>
+        <button
+          className="relative !px-2.5"
+          onClick={() => setDialog('buddy')}
+          aria-label={`เปี๊ยก แมวประจำแอป${unseen > 0 ? ` (มีของปลดล็อกใหม่ ${unseen})` : ''}`}
+          title="เปี๊ยก แมวประจำแอป"
+        >
+          <PawIcon />
+          {unseen > 0 && <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full border border-card bg-[#e8647a]" aria-hidden />}
+        </button>
         <button onClick={() => setDialog('notify')}>🔔 การแจ้งเตือน</button>
         <button onClick={() => { setDraft(null); setDialog('reminders') }}>
           ⏰ เตือนรายการ{dueCount > 0 && <span className="badge">{dueCount}</span>}
@@ -586,13 +622,21 @@ export default function App() {
           sound={settings.buddy.sound}
           ctx={buddyCtx}
           pets={stats.pets}
+          capped={petsLeftToday(stats, new Date()) === 0}
           skin={look.skin}
           outfit={look.outfit}
+          toy={look.toy}
           moves={moves}
-          onPet={() => bump(recordPet)}
+          onPet={({ woke, flurry }) => {
+            if (flurry) return // scaring it is not petting it
+            bump((s) => {
+              const n = recordPet(s, new Date())
+              return woke ? recordWake(n) : n
+            })
+          }}
           onHide={() => {
             update({ buddy: { ...settings.buddy, visible: false } })
-            push({ title: 'ซ่อนเปี๊ยกแล้ว', body: 'เรียกกลับมาได้ที่ ⚙ ตั้งค่า' })
+            push({ title: 'ซ่อนเปี๊ยกแล้ว', body: 'เรียกกลับมาได้ที่ปุ่มอุ้งเท้า 🐾 ที่แถบบน' })
           }}
         />
       )}
@@ -606,6 +650,7 @@ export default function App() {
             reminders={reminders}
             groupBy={groupBy}
             onRestore={restore}
+            onExported={(format) => bump((s) => recordExport(s, format, new Date()))}
             onClear={clearAll}
             onClose={() => setDialog(null)}
           />
@@ -645,13 +690,10 @@ export default function App() {
             onTheme={(theme) => update({ theme })}
             onGroupBy={(g) => update({ groupBy: g })}
             onChange={(d) => update({ display: d })}
-            buddy={settings.buddy}
-            onBuddy={(buddy) => update({ buddy })}
-            onWardrobe={() => setDialog('buddy')}
             onClose={() => setDialog(null)}
           />}
         {dialog === 'buddy' && (
-          <BuddyModal stats={stats} skin={look.skin} outfit={look.outfit} onEquip={(patch) => update({ buddy: { ...settings.buddy, ...patch } })} onClose={() => setDialog(null)} />
+          <BuddyModal stats={stats} buddy={settings.buddy} onBuddy={(buddy) => update({ buddy })} skin={look.skin} outfit={look.outfit} toy={look.toy} onEquip={(patch) => update({ buddy: { ...settings.buddy, ...patch } })} onClose={() => setDialog(null)} />
         )}
         {editing && <EditModal rows={editing} all={shipments} era={settings.era} onSave={saveEdit} onClose={() => setEditing(null)} />}
       </Suspense>

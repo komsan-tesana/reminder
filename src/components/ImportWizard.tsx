@@ -10,7 +10,7 @@ import Select from './Select'
 
 type Props = {
   onClose: () => void
-  onImported: (items: Shipment[], kept: number, removed: number) => void
+  onImported: (items: Shipment[], kept: number, removed: number, added: number) => void
 }
 
 export default function ImportWizard({ onClose, onImported }: Props) {
@@ -62,8 +62,8 @@ export default function ImportWizard({ onClose, onImported }: Props) {
     setBusy(true)
     try {
       saveMapping(sheet.headers, mapping)
-      const { kept, removed } = await commitImport(result.items, mode)
-      onImported(result.items, kept, removed)
+      const { kept, removed, added } = await commitImport(result.items, mode)
+      onImported(result.items, kept, removed, added)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setBusy(false)

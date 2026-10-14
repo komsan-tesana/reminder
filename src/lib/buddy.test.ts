@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { clickReply, durationMs, EMPTY_CTX, isFlurry, nextState, occasionLines, periodOf, pickLine, seasonOf, workLines, type BuddyState, type Period } from './buddy'
-import { buildSprite, spritePaths, PALETTE, SKINS, type Outfit, type Pose, type Skin } from './buddySprite'
+import { buildSprite, hasToyArt, spritePaths, PALETTE, SKINS, type Outfit, type Pose, type Skin, type Toy } from './buddySprite'
 
 /** small seeded generator so "random" tests are repeatable */
 function seeded(seed: number) {
@@ -12,7 +12,7 @@ function seeded(seed: number) {
   }
 }
 const at = (h: number) => new Date(2026, 9, 14, h, 0, 0)
-const STATES: BuddyState[] = ['sit', 'walk', 'yawn', 'sleep', 'play', 'happy', 'stretch', 'roll', 'tail', 'shout']
+const STATES: BuddyState[] = ['sit', 'walk', 'yawn', 'sleep', 'play', 'happy', 'stretch', 'roll', 'tail', 'groom', 'zoom', 'stand', 'shout']
 const PERIODS: Period[] = ['latenight', 'morning', 'noon', 'afternoon', 'evening', 'night']
 
 describe('buddy: time of day', () => {
@@ -34,6 +34,12 @@ describe('buddy: what the cat does next', () => {
           if (cur !== 'sleep') expect(n).not.toBe(cur)
           expect(n).not.toBe('happy') // happy only comes from being poked
         }
+  })
+
+  it('does the zoomies mostly at night, not in the morning', () => {
+    const rnd = seeded(21)
+    const zooms = (p: Period) => Array.from({ length: 3000 }, () => nextState('sit', p, rnd, ['zoom'])).filter((s) => s === 'zoom').length
+    expect(zooms('latenight')).toBeGreaterThan(zooms('morning') * 4)
   })
 
   it('sleeps more at night than in the morning, and walks more in the morning than at night', () => {
@@ -97,12 +103,17 @@ describe('buddy: what the cat says', () => {
     const woken = clickReply('sleep', 'night', EMPTY_CTX, 3, rnd)
     expect(woken.next).toBe('yawn')
     expect(woken.line.length).toBeGreaterThan(5)
-    expect(clickReply('sleep', 'night', EMPTY_CTX, 10, rnd)).toMatchObject({ next: 'happy', line: expect.stringContaining('10 ครั้ง') })
+    expect(clickReply('sleep', 'night', EMPTY_CTX, 1000, rnd)).toMatchObject({ next: 'happy', line: expect.stringContaining('1,000 ครั้ง') })
+    // a poke that was not counted (cap used up) never repeats a milestone line
+    expect(clickReply('sit', 'noon', EMPTY_CTX, 1000, rnd, false, false).line).not.toContain('1,000')
+    // with today's quota used up it sometimes says so
+    const lines = new Set(Array.from({ length: 200 }, () => clickReply('sit', 'noon', EMPTY_CTX, 40, seeded(Math.random() * 1e9), false, false, true).line))
+    expect([...lines].some((l) => l.includes('200 ครั้ง'))).toBe(true)
   })
 })
 
 describe('buddy: sprites', () => {
-  const POSES: Pose[] = ['sit', 'blink', 'walkA', 'walkB', 'sleep', 'yawn', 'happy', 'playA', 'playB', 'stretch', 'roll', 'tailA', 'tailB', 'shout']
+  const POSES: Pose[] = ['sit', 'blink', 'walkA', 'walkB', 'sleep', 'yawn', 'happy', 'playA', 'playB', 'stretch', 'roll', 'tailA', 'tailB', 'shout', 'groomA', 'groomB', 'zoomA', 'zoomB', 'stand']
   it('every pose is a rectangular grid with an outline and only known colours', () => {
     for (const p of POSES) {
       const s = buildSprite(p)
@@ -119,7 +130,7 @@ describe('buddy: sprites', () => {
     }
   })
 
-  const OUTFITS: Outfit[] = ['scarf', 'cap', 'hardhat', 'glasses', 'crown', 'party', 'songkran', 'krathong']
+  const OUTFITS: Outfit[] = ['scarf', 'cap', 'hardhat', 'glasses', 'crown', 'party', 'songkran', 'krathong', 'vest', 'nightcap', 'tie', 'medal', 'ninja', 'halloween', 'christmas', 'bell', 'bowtie']
   it('every outfit changes every pose and keeps the outline inside the grid', () => {
     for (const p of POSES)
       for (const o of OUTFITS) {
@@ -130,6 +141,20 @@ describe('buddy: sprites', () => {
           expect(e.every((c) => !c || c === 'O')).toBe(true)
         for (const c of dressed.cells.flat()) if (c) expect(PALETTE).toHaveProperty(c)
       }
+  })
+
+  const TOYS: Exclude<Toy, 'notoy'>[] = ['mackerel', 'mouse', 'pompom', 'feather', 'can', 'key', 'receipt', 'yarn', 'fishbone', 'magnifier', 'catnip', 'treat', 'pencil']
+  it('a toy either has art that changes every pose and fits the grid, or none and changes nothing', () => {
+    for (const toy of TOYS)
+      for (const p of POSES) {
+        const bare = buildSprite(p)
+        const withToy = buildSprite(p, 'none', toy)
+        const changed = withToy.cells.flat().join('') !== bare.cells.flat().join('')
+        expect(changed, `${toy} on ${p}`).toBe(hasToyArt(toy))
+        for (const e of [withToy.cells[0], withToy.cells[withToy.h - 1], withToy.cells.map((r) => r[0]), withToy.cells.map((r) => r[withToy.w - 1])])
+          expect(e.every((c) => !c || c === 'O')).toBe(true)
+      }
+    expect(buildSprite('sit', 'none', 'notoy')).toBe(buildSprite('sit'))
   })
 
   it('skins recolour the fur only: same shapes, different colours', () => {
@@ -146,6 +171,10 @@ describe('buddy: sprites', () => {
     expect(flat('sit')).not.toBe(flat('blink'))
     expect(flat('yawn')).not.toBe(flat('sit'))
     expect(flat('playA')).not.toBe(flat('playB'))
+    expect(flat('groomA')).not.toBe(flat('groomB'))
+    expect(flat('zoomA')).not.toBe(flat('zoomB'))
+    expect(flat('stand')).not.toBe(flat('sit'))
+    expect(buildSprite('stand').h).toBeGreaterThan(buildSprite('sit').h) // it is taller standing up
   })
 })
 
@@ -158,9 +187,9 @@ describe('buddy: saved settings', () => {
     const store: Record<string, string> = { 'reminder.settings.v1': JSON.stringify({ era: 'CE' }) }
     stub(store)
     const { loadSettings } = await import('./db')
-    expect(loadSettings().buddy).toEqual({ visible: true, sound: false, skin: 'calico', outfit: 'none' })
+    expect(loadSettings().buddy).toEqual({ visible: true, sound: false, skin: 'calico', outfit: 'none', toy: 'notoy' })
     store['reminder.settings.v1'] = JSON.stringify({ buddy: { sound: true } })
-    expect(loadSettings().buddy).toEqual({ visible: true, sound: true, skin: 'calico', outfit: 'none' })
+    expect(loadSettings().buddy).toEqual({ visible: true, sound: true, skin: 'calico', outfit: 'none', toy: 'notoy' })
   })
 })
 
@@ -172,8 +201,9 @@ describe('buddy: unlockable moves, festivals and the scared flurry', () => {
       for (let i = 0; i < 2000; i++) s.add(nextState('sit', 'evening', rnd, allowed))
       return s
     }
-    for (const m of ['stretch', 'roll', 'tail'] as const) expect(seen([]).has(m)).toBe(false)
+    for (const m of ['stretch', 'roll', 'tail', 'groom', 'zoom', 'stand'] as const) expect(seen([]).has(m)).toBe(false)
     expect(seen(['stretch', 'roll', 'tail']).has('stretch')).toBe(true)
+    expect(seen(['groom']).has('zoom')).toBe(false)
     expect(seen(['stretch']).has('roll')).toBe(false)
   })
 
@@ -184,6 +214,11 @@ describe('buddy: unlockable moves, festivals and the scared flurry', () => {
     expect(seasonOf(new Date(2027, 0, 2))).toBe('newyear')
     expect(seasonOf(new Date(2027, 0, 3))).toBeNull()
     expect(seasonOf(new Date(2026, 10, 24))).toBe('krathong')
+    expect(seasonOf(new Date(2026, 9, 31))).toBe('halloween')
+    expect(seasonOf(new Date(2026, 9, 30))).toBeNull()
+    expect(seasonOf(new Date(2026, 11, 24))).toBe('christmas')
+    expect(seasonOf(new Date(2026, 11, 25))).toBe('christmas')
+    expect(seasonOf(new Date(2026, 11, 26))).toBeNull()
   })
 
   it('has festival and weekday lines, and uses them in jokes on those days', () => {

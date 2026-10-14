@@ -28,4 +28,17 @@ describe('deleting shipments', () => {
     expect((await db.shipments.toArray()).map((r) => r.id)).toEqual(['a'])
     expect(await db.deleted.count()).toBe(0)
   })
+
+  it('reports how many rows were new, so re-importing the same file adds none', async () => {
+    const { db, commitImport, deleteShipments } = await import('./db')
+    const file = [row('a'), row('b'), row('c')]
+    expect((await commitImport(file, 'merge')).added).toBe(3)
+    expect((await commitImport(file, 'merge')).added).toBe(0) // the same file again
+    expect((await commitImport([...file, row('d')], 'merge')).added).toBe(1)
+    expect((await commitImport(file, 'replace')).added).toBe(0) // replacing with rows that were all there already
+    await deleteShipments(['a'])
+    expect((await commitImport(file, 'merge')).added).toBe(0) // a deleted row is not "new" either
+    await db.shipments.clear()
+    expect((await commitImport(file, 'replace')).added).toBe(3)
+  })
 })

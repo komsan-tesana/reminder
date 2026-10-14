@@ -3,7 +3,7 @@ import type { Era, GroupBy, Mapping, NotifySettings, Reminder, Shipment, Theme }
 import { isTheme } from './theme'
 import { DEFAULT_TONES, migrateToneColor, type ToneSetting } from './tones'
 import type { Season } from './buddy'
-import type { BuddyStats } from './buddyUnlocks'
+import { grandfather, ITEMS, streak, type BuddyStats } from './buddyUnlocks'
 
 export { DEFAULT_TONES }
 export type { ToneSetting }
@@ -29,7 +29,7 @@ export const db = new AppDB()
 export type DisplaySettings = { statusColors: boolean; tones: Record<Tone, ToneSetting> }
 
 /** the app cat (เปี๊ยก): shown or hidden, and whether it meows when poked */
-export type BuddySettings = { visible: boolean; sound: boolean; skin: string; outfit: string }
+export type BuddySettings = { visible: boolean; sound: boolean; skin: string; outfit: string; toy: string }
 
 export type Settings = { era: Era; groupBy: GroupBy; theme: Theme; notify: NotifySettings; display: DisplaySettings; buddy: BuddySettings }
 export const DEFAULT_SETTINGS: Settings = {
@@ -38,7 +38,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   notify: { enabled: false, time: '08:00', today: true, daysAhead: 1, sound: true },
   display: { statusColors: true, tones: DEFAULT_TONES },
-  buddy: { visible: true, sound: false, skin: 'calico', outfit: 'none' },
+  buddy: { visible: true, sound: false, skin: 'calico', outfit: 'none', toy: 'notoy' },
 }
 const SETTINGS_KEY = 'reminder.settings.v1'
 const MAPPING_KEY = 'reminder.mapping.v1'
@@ -88,19 +88,50 @@ export function loadPanelSize(): { w: number | null; h: number | null } {
 }
 const BUDDY_KEY = 'reminder.buddy.v1'
 /** progress toward the cat's unlockable skins, outfits and moves; every field is validated on the way in */
-export function loadBuddyStats(): BuddyStats {
+export function loadBuddyStats(now: Date = new Date()): BuddyStats {
   const raw = read<Record<string, unknown>>(BUDDY_KEY, {})
   const count = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0)
-  const day = /^\d{4}-\d{2}-\d{2}$/
-  const seasons: Season[] = ['songkran', 'newyear', 'krathong']
-  return {
+  const dayRe = /^\d{4}-\d{2}-\d{2}$/
+  const day = (v: unknown) => (typeof v === 'string' && dayRe.test(v) ? v : '')
+  const known = new Set(ITEMS.map((i) => i.id))
+  const ids = (v: unknown) => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string' && known.has(x)))] : [])
+  const seasons: Season[] = ['songkran', 'newyear', 'krathong', 'halloween', 'christmas']
+  const today = (raw.petsToday ?? {}) as Record<string, unknown>
+  const filterToday = (raw.filterToday ?? {}) as Record<string, unknown>
+  const days = Array.isArray(raw.days) ? raw.days.filter((x): x is string => typeof x === 'string' && dayRe.test(x)).slice(-120) : []
+  const stats: BuddyStats = {
     pets: count(raw.pets),
-    days: Array.isArray(raw.days) ? raw.days.filter((x): x is string => typeof x === 'string' && day.test(x)).slice(-120) : [],
+    petsToday: { day: day(today.day), n: count(today.n) },
+    days,
+    // records from before these counters existed: start them from what the day list already shows
+    totalDays: Math.max(count(raw.totalDays), days.length),
+    bestStreak: Math.max(count(raw.bestStreak), streak(days, now)),
     remindersDone: count(raw.remindersDone),
     imports: count(raw.imports),
     nightOwl: raw.nightOwl === true,
+    nightVisits: count(raw.nightVisits),
+    lastNight: day(raw.lastNight),
+    perfectDays: count(raw.perfectDays),
+    lastPerfect: day(raw.lastPerfect),
+    wakes: count(raw.wakes),
+    rowsImported: count(raw.rowsImported),
+    maxCustomers: count(raw.maxCustomers),
+    maxSOs: count(raw.maxSOs),
+    maxDayRows: count(raw.maxDayRows),
+    maxMonths: count(raw.maxMonths),
+    exports: count(raw.exports),
+    backupDays: count(raw.backupDays),
+    lastBackup: day(raw.lastBackup),
+    assigned: count(raw.assigned),
+    edits: count(raw.edits),
+    filterUses: count(raw.filterUses),
+    filterToday: { day: day(filterToday.day), n: count(filterToday.n) },
     seasons: Array.isArray(raw.seasons) ? seasons.filter((x) => (raw.seasons as unknown[]).includes(x)) : [],
+    earned: ids(raw.earned),
+    seen: ids(raw.seen),
   }
+  // no earned list yet = saved by an older version: keep what its rules had already given out
+  return Array.isArray(raw.earned) ? stats : grandfather(stats, now)
 }
 export const saveBuddyStats = (s: BuddyStats) => write(BUDDY_KEY, s)
 
@@ -138,24 +169,28 @@ export function saveMapping(headers: string[], mapping: Mapping) {
  * Merge keeps rows the user edited in the app (their ids match even if the date was moved),
  * everything else is overwritten by the file. Replace wipes the table first.
  */
-export async function commitImport(items: Shipment[], mode: 'merge' | 'replace'): Promise<{ kept: number; removed: number }> {
+export async function commitImport(items: Shipment[], mode: 'merge' | 'replace'): Promise<{ kept: number; removed: number; added: number }> {
   let kept = 0
   let removed = 0
+  let added = 0
   await db.transaction('rw', db.shipments, db.deleted, async () => {
+    const ids = items.map((i) => i.id)
+    const [existing, gone] = await Promise.all([db.shipments.bulkGet(ids), db.deleted.bulkGet(ids)])
     if (mode === 'replace') {
+      // rows that were not in the app before; re-importing the same file adds none
+      added = existing.filter((e) => !e).length
       await db.shipments.clear()
       await db.deleted.clear()
       await db.shipments.bulkPut(items)
       return
     }
-    const ids = items.map((i) => i.id)
-    const [existing, gone] = await Promise.all([db.shipments.bulkGet(ids), db.deleted.bulkGet(ids)])
     removed = gone.filter(Boolean).length
+    added = items.filter((_, i) => !gone[i] && !existing[i]).length
     const toWrite = items.filter((_, i) => !gone[i] && !existing[i]?.editedAt)
     kept = items.filter((_, i) => !gone[i] && existing[i]?.editedAt).length
     await db.shipments.bulkPut(toWrite)
   })
-  return { kept, removed }
+  return { kept, removed, added }
 }
 
 export async function restoreBackup(data: { shipments: Shipment[]; reminders: Reminder[] }, mode: 'merge' | 'replace') {
