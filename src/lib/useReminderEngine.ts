@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { lastDigestDate, setLastDigestDate } from './db'
 import { playChime } from './sound'
-import { dailyDigest, dueReminders, localDate, shouldFireDigest } from './reminders'
+import { digestToFire, dueReminders, localDate } from './reminders'
 import type { NotifySettings, Reminder, Shipment } from '../types'
 
 type Msg = { title: string; body: string; tag?: string }
@@ -46,14 +46,14 @@ export function useReminderEngine(args: Args) {
       const now = new Date()
       let alerted = false
 
-      if (shouldFireDigest(notify, now, lastDigestDate())) {
+      // the day only counts as done once a digest was really shown; with nothing to say yet we
+      // keep checking, so work that arrives later today is still announced
+      const d = digestToFire(shipments, now, notify, lastDigestDate())
+      if (d) {
         setLastDigestDate(localDate(now))
-        const d = dailyDigest(shipments, now, notify)
-        if (d) {
-          void systemNotify({ ...d, tag: 'digest' })
-          push(d)
-          alerted = true
-        }
+        void systemNotify({ ...d, tag: 'digest' })
+        push(d)
+        alerted = true
       }
 
       const due = dueReminders(reminders, now)

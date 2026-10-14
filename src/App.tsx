@@ -226,17 +226,20 @@ export default function App() {
   async function exportCalendar() {
     const today = localDate(new Date())
     const upcoming = shipments.filter((s) => s.date >= today)
-    const ics = toICS(buildGroups(upcoming, groupBy), new Date(), reminders)
+    const n0 = settings.notify
+    // with the daily summary on, the calendar announces it by itself (even with the app closed)
+    const ics = toICS(buildGroups(upcoming, groupBy), new Date(), reminders, n0.enabled ? { shipments, time: n0.time, today: n0.today, daysAhead: n0.daysAhead } : undefined)
     const result = await syncToDeviceCalendar(ics, `transport-${today.replace(/-/g, '')}.ics`)
     const n = reminders.filter((r) => !r.done).length
+    const digestNote = n0.enabled ? ` · รวมสรุปรายวันเวลา ${n0.time}` : ''
     push({
       title: 'ซิงก์ปฏิทิน',
       body:
         result === 'opened'
-          ? `เปิดหน้าต่างเพิ่มลงปฏิทินแล้ว (${upcoming.length} รายการ + เตือน ${n}) กด “เพิ่มทั้งหมด” เพื่อยืนยัน`
+          ? `เปิดหน้าต่างเพิ่มลงปฏิทินแล้ว (${upcoming.length} รายการ + เตือน ${n}${digestNote}) กด “เพิ่มทั้งหมด” เพื่อยืนยัน`
           : result === 'needs-reload'
             ? 'ดาวน์โหลดไฟล์แทน เพราะเปิดเว็บครั้งแรกยังไม่พร้อม ให้รีเฟรชหน้านี้หนึ่งครั้งแล้วกดซิงก์อีกครั้ง จะขึ้นหน้าต่างเพิ่มลงปฏิทินเอง'
-            : `ดาวน์โหลดไฟล์ปฏิทินแล้ว (${upcoming.length} รายการ + เตือน ${n}) เปิดไฟล์เพื่อเพิ่มลงปฏิทิน`,
+            : `ดาวน์โหลดไฟล์ปฏิทินแล้ว (${upcoming.length} รายการ + เตือน ${n}${digestNote}) เปิดไฟล์เพื่อเพิ่มลงปฏิทิน`,
     })
   }
 
