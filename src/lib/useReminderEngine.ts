@@ -4,14 +4,24 @@ import { playChime } from './sound'
 import { dailyDigest, dueReminders, localDate, shouldFireDigest } from './reminders'
 import type { NotifySettings, Reminder, Shipment } from '../types'
 
-type Msg = { title: string; body: string }
+type Msg = { title: string; body: string; tag?: string }
 
-/** Native notification when permitted; the in-page toast is always shown as well. */
-export function systemNotify({ title, body }: Msg) {
+/**
+ * Native notification when permitted; the in-page toast is always shown as well.
+ * Goes through the service worker when one is active: that is the only way on Android Chrome
+ * (new Notification() throws there) and on an iOS Home Screen app.
+ */
+export async function systemNotify({ title, body, tag }: Msg) {
   try {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') new Notification(title, { body })
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+    const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : undefined
+    if (reg?.active) {
+      await reg.showNotification(title, { body, tag, icon: new URL('icons/icon-192.png', document.baseURI).href })
+      return
+    }
+    new Notification(title, { body, tag })
   } catch {
-    /* some browsers throw outside a service worker; the toast still shows */
+    /* blocked by the browser; the toast still shows */
   }
 }
 
@@ -40,7 +50,7 @@ export function useReminderEngine(args: Args) {
         setLastDigestDate(localDate(now))
         const d = dailyDigest(shipments, now, notify)
         if (d) {
-          systemNotify(d)
+          void systemNotify({ ...d, tag: 'digest' })
           push(d)
           alerted = true
         }
@@ -50,8 +60,8 @@ export function useReminderEngine(args: Args) {
       if (due.length) {
         markFired(due.map((r) => r.id))
         for (const r of due) {
-          const m = { title: 'เตือน', body: r.title }
-          systemNotify(m)
+          const m = { title: 'เตือน', body: r.title, tag: `reminder-${r.id}` }
+          void systemNotify(m)
           push(m)
         }
         alerted = true

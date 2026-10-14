@@ -1,5 +1,10 @@
 import Dexie, { type Table } from 'dexie'
-import type { Era, GroupBy, Mapping, NotifySettings, Reminder, Shipment } from '../types'
+import type { Era, GroupBy, Mapping, NotifySettings, Reminder, Shipment, Theme } from '../types'
+import { isTheme } from './theme'
+import { DEFAULT_TONES, migrateToneColor, type ToneSetting } from './tones'
+
+export { DEFAULT_TONES }
+export type { ToneSetting }
 import type { Tone } from './group'
 
 // 4k+ rows exceed the ~5MB localStorage quota, so data lives in IndexedDB
@@ -15,20 +20,14 @@ class AppDB extends Dexie {
 }
 export const db = new AppDB()
 
-export type ToneSetting = { show: boolean; color: string }
 /** statusColors is the master switch; each tone can also be hidden or recoloured. */
 export type DisplaySettings = { statusColors: boolean; tones: Record<Tone, ToneSetting> }
 
-export const DEFAULT_TONES: Record<Tone, ToneSetting> = {
-  assigned: { show: true, color: '#16a34a' },
-  pending: { show: true, color: '#ea580c' },
-  unassigned: { show: true, color: '#8b95a3' },
-}
-
-export type Settings = { era: Era; groupBy: GroupBy; notify: NotifySettings; display: DisplaySettings }
+export type Settings = { era: Era; groupBy: GroupBy; theme: Theme; notify: NotifySettings; display: DisplaySettings }
 export const DEFAULT_SETTINGS: Settings = {
   era: 'BE',
   groupBy: 'customer',
+  theme: 'system',
   notify: { enabled: false, time: '08:00', today: true, daysAhead: 1, sound: true },
   display: { statusColors: true, tones: DEFAULT_TONES },
 }
@@ -55,7 +54,10 @@ function write(key: string, value: unknown) {
 export function loadSettings(): Settings {
   const s = read<Settings>(SETTINGS_KEY, DEFAULT_SETTINGS)
   const tones = Object.fromEntries(
-    (Object.keys(DEFAULT_TONES) as Tone[]).map((t) => [t, { ...DEFAULT_TONES[t], ...s.display?.tones?.[t] }]),
+    (Object.keys(DEFAULT_TONES) as Tone[]).map((t) => {
+      const saved = s.display?.tones?.[t]
+      return [t, { ...DEFAULT_TONES[t], ...saved, color: migrateToneColor(t, saved?.color) }]
+    }),
   ) as Record<Tone, ToneSetting>
   // older versions stored `tomorrow: boolean` instead of `daysAhead`
   const { tomorrow, ...savedNotify } = (s.notify ?? {}) as Partial<NotifySettings> & { tomorrow?: boolean }
@@ -63,6 +65,7 @@ export function loadSettings(): Settings {
   if (savedNotify.daysAhead === undefined && tomorrow === false) notify.daysAhead = 0
   return {
     ...s,
+    theme: isTheme(s.theme) ? s.theme : 'system',
     notify,
     display: { statusColors: s.display?.statusColors ?? true, tones },
   }

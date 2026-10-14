@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Modal from './Modal'
 import { addDays, localDateTime } from '../lib/reminders'
 import { fmtDate } from '../lib/format'
+import { currentNotifyState, currentPlatform } from '../lib/platform'
 import type { Era, NotifySettings, Reminder } from '../types'
 
 export type ReminderDraft = { title: string; date: string }
@@ -16,20 +17,21 @@ type Props = {
   onToggle: (r: Reminder) => void
   onDelete: (id: string) => void
   onTest: () => void
+  onExportCalendar: () => void
   onClose: () => void
 }
 
-const permission = () => (typeof Notification === 'undefined' ? 'unsupported' : Notification.permission)
-
-export default function ReminderModal({ era, notify, reminders, draft, onNotify, onAdd, onToggle, onDelete, onTest, onClose }: Props) {
-  const [perm, setPerm] = useState(permission())
+export default function ReminderModal({ era, notify, reminders, draft, onNotify, onAdd, onToggle, onDelete, onTest, onExportCalendar, onClose }: Props) {
+  const [perm, setPerm] = useState(currentNotifyState())
+  const platform = currentPlatform()
   const [title, setTitle] = useState(draft?.title ?? '')
   // default: 08:00 the day before the shipment
   const [at, setAt] = useState(draft ? `${addDays(draft.date, -1)}T08:00` : localDateTime(new Date()))
 
   async function toggleEnabled(on: boolean) {
-    if (on && typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      setPerm(await Notification.requestPermission())
+    if (on && perm === 'default') {
+      await Notification.requestPermission()
+      setPerm(currentNotifyState())
     }
     onNotify({ ...notify, enabled: on })
   }
@@ -82,8 +84,22 @@ export default function ReminderModal({ era, notify, reminders, draft, onNotify,
           {perm === 'denied' && 'เบราว์เซอร์บล็อกการแจ้งเตือน จะแสดงเป็นข้อความในหน้านี้แทน (เปิดสิทธิ์ได้ที่ตั้งค่าของเว็บไซต์)'}
           {perm === 'default' && 'ยังไม่ได้ขออนุญาตเบราว์เซอร์ จะขอเมื่อเปิดสวิตช์ด้านบน'}
           {perm === 'unsupported' && 'เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน จะแสดงเป็นข้อความในหน้านี้แทน'}
-          <br />
-          เว็บบน GitHub Pages ส่งการแจ้งเตือนได้เฉพาะตอนเปิดแท็บค้างไว้ ถ้าต้องการให้เตือนแม้ปิดแอป ให้ส่งออกเป็น .ics แล้วนำเข้า Google/Outlook Calendar
+          {perm === 'ios-install' && 'บน iPhone/iPad แจ้งเตือนของเว็บใช้ได้เมื่อเพิ่มแอปลงหน้าจอโฮมก่อน: กดปุ่มแชร์ใน Safari → “เพิ่มไปยังหน้าจอโฮม” แล้วเปิดจากไอคอนนั้น (ต้อง iOS 16.4 ขึ้นไป)'}
+        </p>
+      </div>
+
+      <h3>ให้เด้งเตือนแม้ปิดแอป/ล็อกจอ</h3>
+      <div className="form">
+        <p className="muted small">
+          เว็บนี้ไม่มี server เลยส่งแจ้งเตือนได้เฉพาะตอนแอปเปิดอยู่ ({platform === 'ios' ? 'iOS จะหยุดแอปทันทีที่ล็อกจอ' : 'เบราว์เซอร์อาจหยุดแท็บที่อยู่เบื้องหลัง'})
+          วิธีที่เด้งตอนล็อกจอได้แน่นอน คือเพิ่มงานและรายการเตือนลงแอปปฏิทินของเครื่อง ซึ่งจะเตือนเองโดยไม่ต้องเปิดเว็บ
+        </p>
+        <div className="row">
+          <button onClick={onExportCalendar}>📅 เพิ่มลงปฏิทินเครื่อง (.ics)</button>
+        </div>
+        <p className="muted small">
+          ได้ไฟล์งานตั้งแต่วันนี้เป็นต้นไป (1 กลุ่ม/วัน เตือน 09:00 วันก่อนและ 08:00 วันนั้น) + รายการเตือนที่ตั้งไว้ ·{' '}
+          {platform === 'ios' ? 'บน iPhone: เปิดไฟล์ที่ดาวน์โหลด แล้วกด “เพิ่มทั้งหมด”' : 'เปิดไฟล์เพื่อนำเข้า Google/Outlook/Apple Calendar'} · ต้องส่งออกใหม่เมื่อข้อมูลเปลี่ยน
         </p>
       </div>
 

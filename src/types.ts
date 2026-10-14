@@ -1,4 +1,5 @@
 export type Era = 'BE' | 'CE'
+export type Theme = 'system' | 'light' | 'dark'
 export type EraMode = 'auto' | Era
 export type GroupBy = 'customer' | 'so' | 'truck'
 

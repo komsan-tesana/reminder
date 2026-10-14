@@ -1,14 +1,17 @@
 import Modal from './Modal'
 import { DEFAULT_TONES, type DisplaySettings } from '../lib/db'
 import type { Tone } from '../lib/group'
-import type { Era, GroupBy } from '../types'
+import { THEMES, THEME_LABEL } from '../lib/theme'
+import type { Era, GroupBy, Theme } from '../types'
 
 type Props = {
   display: DisplaySettings
   era: Era
+  theme: Theme
   groupBy: GroupBy
   groupChoices: { value: GroupBy; label: string }[]
   onEra: (e: Era) => void
+  onTheme: (t: Theme) => void
   onGroupBy: (g: GroupBy) => void
   onChange: (d: DisplaySettings) => void
   onClose: () => void
@@ -20,7 +23,7 @@ const TONES: { tone: Tone; label: string; hint: string }[] = [
   { tone: 'unassigned', label: 'ยังไม่จัดรถ', hint: 'ยังไม่มีคนขับ/รถ' },
 ]
 
-export default function SettingsModal({ display, era, groupBy, groupChoices, onEra, onGroupBy, onChange, onClose }: Props) {
+export default function SettingsModal({ display, era, theme, groupBy, groupChoices, onEra, onTheme, onGroupBy, onChange, onClose }: Props) {
   const setTone = (tone: Tone, patch: Partial<DisplaySettings['tones'][Tone]>) =>
     onChange({ ...display, tones: { ...display.tones, [tone]: { ...display.tones[tone], ...patch } } })
 
@@ -37,6 +40,18 @@ export default function SettingsModal({ display, era, groupBy, groupChoices, onE
         </>
       }
     >
+      <h3>ธีม</h3>
+      <div className="form">
+        <div className="seg" role="radiogroup" aria-label="ธีม">
+          {THEMES.map((t) => (
+            <button key={t} role="radio" aria-checked={theme === t} className={theme === t ? 'on' : ''} onClick={() => onTheme(t)}>
+              {t === 'light' ? '☀️ ' : t === 'dark' ? '🌙 ' : '🖥 '}
+              {THEME_LABEL[t]}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <h3>ปฏิทิน</h3>
       <div className="form">
         <div className="row">
@@ -87,7 +102,7 @@ export default function SettingsModal({ display, era, groupBy, groupChoices, onE
                 value={display.tones[tone].color}
                 onChange={(e) => setTone(tone, { color: e.target.value })}
               />
-              <span className="swatch" style={{ background: display.statusColors && display.tones[tone].show ? display.tones[tone].color : 'var(--accent)' }}>
+              <span className="swatch" style={{ background: display.statusColors && display.tones[tone].show ? display.tones[tone].color : 'var(--accent-fill)' }}>
                 ตัวอย่าง
               </span>
             </li>

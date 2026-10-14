@@ -1,5 +1,6 @@
 import { parseDate } from './dateParse'
 import type { Group } from './group'
+import { localDateTime } from './reminders'
 import type { Reminder, Shipment } from '../types'
 
 export type DateFmt = 'CE' | 'BE'
@@ -95,7 +96,7 @@ const nextDay = (iso: string) => {
 }
 
 /** One all-day event per group, with alarms at 09:00 the day before and 08:00 the same day. */
-export function toICS(groups: Group[], now: Date = new Date()): string {
+export function toICS(groups: Group[], now: Date = new Date(), reminders: Reminder[] = []): string {
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Transport Calendar//TH', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Transport Calendar']
   const sorted = [...groups].sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label))
   for (const g of sorted) {
@@ -123,6 +124,32 @@ export function toICS(groups: Group[], now: Date = new Date()): string {
       'ACTION:DISPLAY',
       `DESCRIPTION:${icsEscape(g.label)}`,
       'TRIGGER:PT8H',
+      'END:VALARM',
+      'END:VEVENT',
+    )
+  }
+  // per-item reminders: timed events with an alert at the start, so the phone's own Calendar
+  // alerts even when the app is closed or the screen is locked
+  const nowLocal = localDateTime(now)
+  for (const r of reminders.filter((x) => !x.done && x.at >= nowLocal).sort((a, b) => a.at.localeCompare(b.at))) {
+    const [d, t] = r.at.split('T')
+    const [y, mo, da] = d.split('-').map(Number)
+    const [h, mi] = t.split(':').map(Number)
+    const end = new Date(y, mo - 1, da, h, mi + 30)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const endStr = `${end.getFullYear()}${pad(end.getMonth() + 1)}${pad(end.getDate())}T${pad(end.getHours())}${pad(end.getMinutes())}00`
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:reminder-${r.id.replace(/[^\w-]/g, '_')}@transport-calendar`,
+      `DTSTAMP:${stamp(now)}`,
+      `DTSTART:${compact(d)}T${t.replace(':', '')}00`,
+      `DTEND:${endStr}`,
+      `SUMMARY:${icsEscape(`🔔 ${r.title}`)}`,
+      ...(r.note ? [`DESCRIPTION:${icsEscape(r.note)}`] : []),
+      'BEGIN:VALARM',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${icsEscape(r.title)}`,
+      'TRIGGER:PT0S',
       'END:VALARM',
       'END:VEVENT',
     )
