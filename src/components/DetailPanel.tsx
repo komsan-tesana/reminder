@@ -1,8 +1,37 @@
 import { useMemo, useState } from 'react'
+import {
+  flexRender,
+  getCoreRowModel,
+  getFacetedRowModel,
+  getFacetedUniqueValues,
+  getFilteredRowModel,
+  useReactTable,
+  type ColumnDef,
+  type ColumnFiltersState,
+  type FilterFn,
+} from '@tanstack/react-table'
 import { fmtDate, fmtQty } from '../lib/format'
 import { groupKey } from '../lib/group'
 import type { Available } from '../lib/available'
+import ColumnFilter from './ColumnFilter'
 import type { Era, GroupBy, Shipment } from '../types'
+
+/** columns that get a header filter in the table; `get` is the text a row shows (and is filtered by) */
+type ColKey = 'so' | 'customer' | 'item' | 'site' | 'driver' | 'truck' | 'status' | 'remark'
+const COL_GET: Record<ColKey, (r: Shipment) => string> = {
+  so: (r) => r.so ?? '',
+  customer: (r) => r.customerName || r.customerCode || '',
+  item: (r) => r.description ?? '',
+  site: (r) => r.site ?? '',
+  driver: (r) => r.driver ?? '',
+  truck: (r) => [r.truckNo, r.plate].filter(Boolean).join(' / '),
+  status: (r) => r.status ?? '',
+  remark: (r) => r.remark ?? '',
+}
+
+/** keeps a row when its cell text is one of the ticked values (header filter); an empty list matches nothing */
+const includesAny: FilterFn<Shipment> = (row, id, value: string[]) => value.includes(String(row.getValue(id) ?? ''))
+includesAny.autoRemove = (v) => v === undefined
 
 type Props = {
   date: string
@@ -28,17 +57,8 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const dayRows = useMemo(() => shipments.filter((s) => s.date === date), [shipments, date])
-  const rows = useMemo(() => {
-    const scoped = groupKeyFilter ? dayRows.filter((s) => groupKey(s, groupBy) === groupKeyFilter) : dayRows
-    const needle = q.trim().toLowerCase()
-    if (!needle) return scoped
-    return scoped.filter((s) => Object.values(s).some((v) => typeof v === 'string' && v.toLowerCase().includes(needle)))
-  }, [dayRows, groupKeyFilter, groupBy, q])
-
-  // only rows that are still visible count as selected (edits can move rows away)
-  const chosen = rows.filter((r) => selected.has(r.id))
-  const allChosen = rows.length > 0 && chosen.length === rows.length
-  const totalQty = rows.reduce((a, r) => a + r.qty, 0)
+  const scoped = useMemo(() => (groupKeyFilter ? dayRows.filter((s) => groupKey(s, groupBy) === groupKeyFilter) : dayRows), [dayRows, groupKeyFilter, groupBy])
+  const [colFilters, setColFilters] = useState<ColumnFiltersState>([])
 
   const toggle = (id: string) =>
     setSelected((s) => {
@@ -47,6 +67,85 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
       else n.add(id)
       return n
     })
+
+  const columns = useMemo<ColumnDef<Shipment>[]>(() => {
+    const text = (id: ColKey, header: string, show: boolean, td: string, cell?: ColumnDef<Shipment>['cell'], th?: string): ColumnDef<Shipment>[] =>
+      show ? [{ id, accessorFn: COL_GET[id], header, filterFn: includesAny, meta: { th, td, filter: true }, ...(cell ? { cell } : {}) }] : []
+    return [
+      {
+        id: 'select',
+        enableColumnFilter: false,
+        enableGlobalFilter: false,
+        header: '',
+        cell: ({ row }) => <input type="checkbox" checked={selected.has(row.id)} onChange={() => toggle(row.id)} aria-label={`เลือก ${row.original.so}`} />,
+      },
+      ...text('so', 'SO', av.so, 'nw so', ({ row }) => (
+        <>
+          {row.original.so}
+          {row.original.editedAt && (
+            <span className="edited" title="แก้ไขในแอป (import ครั้งถัดไปจะไม่ทับ)">
+              {' '}
+              ✎
+            </span>
+          )}
+        </>
+      ), 'so'),
+      ...text('customer', 'ลูกค้า', av.customer, 'cust'),
+      ...text('item', 'สินค้า', av.item, '', ({ row }) => (
+        <div title={row.original.description}>
+          <div className="clip">{row.original.description}</div>
+          <div className="muted small">{row.original.itemNo}</div>
+        </div>
+      )),
+      ...(av.qty
+        ? [
+            {
+              id: 'qty',
+              accessorFn: (r: Shipment) => r.qty,
+              header: 'จำนวน',
+              enableColumnFilter: false,
+              meta: { th: 'num', td: 'num' },
+              cell: ({ row }: { row: { original: Shipment } }) => (
+                <>
+                  {fmtQty(row.original.qty)} {row.original.unit}
+                </>
+              ),
+            } satisfies ColumnDef<Shipment>,
+          ]
+        : []),
+      ...text('site', 'Site', av.site, 'nw'),
+      ...text('driver', 'คนขับ', av.driver, 'nw'),
+      ...text('truck', 'รถ', av.truck, 'nw'),
+      ...text('status', 'สถานะ', av.status, 'nw'),
+      ...text('remark', 'หมายเหตุ', av.remark, ''),
+    ]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [av, selected])
+
+  // TanStack Table does the column filters (header checklists) and the search box; the panel renders what it returns
+  const table = useReactTable({
+    data: scoped,
+    columns,
+    getRowId: (r) => r.id,
+    state: { columnFilters: colFilters, globalFilter: q },
+    onColumnFiltersChange: setColFilters,
+    globalFilterFn: (row, _id, needle: string) => {
+      const n = needle.trim().toLowerCase()
+      return !n || Object.values(row.original).some((v) => typeof v === 'string' && v.toLowerCase().includes(n))
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getFacetedRowModel: getFacetedRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
+  })
+  const rows = table.getRowModel().rows.map((r) => r.original)
+  const activeFilters = colFilters.length
+
+  // only rows that are still visible count as selected (edits can move rows away)
+  const chosen = rows.filter((r) => selected.has(r.id))
+  const allChosen = rows.length > 0 && chosen.length === rows.length
+  const totalQty = rows.reduce((a, r) => a + r.qty, 0)
+
   const toggleAll = () => setSelected(allChosen ? new Set() : new Set(rows.map((r) => r.id)))
   const target = chosen.length ? chosen : rows
   const confirmDelete = () => {
@@ -141,6 +240,7 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
       <div className="panel-tools">
         <input type="search" placeholder="ค้นหาในรายการนี้…" aria-label="ค้นหาในรายการนี้" value={q} onChange={(e) => setQ(e.target.value)} />
         {groupKeyFilter && <button onClick={onShowWholeDay}>ดูทั้งวัน ({dayRows.length})</button>}
+        {activeFilters > 0 && <button onClick={() => setColFilters([])}>ล้างตัวกรองคอลัมน์ ({activeFilters})</button>}
       </div>
       <div className="panel-tools">
         <button className="primary" disabled={rows.length === 0} onClick={() => onEdit(target)}>
@@ -157,60 +257,43 @@ export default function DetailPanel({ date, groupKeyFilter, shipments, era, grou
       <div className="table-wrap">
         <table>
           <thead>
-            <tr>
-              <th>
-                <input type="checkbox" checked={allChosen} onChange={toggleAll} aria-label="เลือกทั้งหมด" />
-              </th>
-              {av.so && <th className="so">SO</th>}
-              {av.customer && <th>ลูกค้า</th>}
-              {av.item && <th>สินค้า</th>}
-              {av.qty && <th className="num">จำนวน</th>}
-              {av.site && <th>Site</th>}
-              {av.driver && <th>คนขับ</th>}
-              {av.truck && <th>รถ</th>}
-              {av.status && <th>สถานะ</th>}
-              {av.remark && <th>หมายเหตุ</th>}
-            </tr>
+            {table.getHeaderGroups().map((hg) => (
+              <tr key={hg.id}>
+                {hg.headers.map((h) => (
+                  <th key={h.id} className={h.column.columnDef.meta?.th}>
+                    {h.column.id === 'select' ? (
+                      <input type="checkbox" checked={allChosen} onChange={toggleAll} aria-label="เลือกทั้งหมด" />
+                    ) : (
+                      <>
+                        {flexRender(h.column.columnDef.header, h.getContext())}{' '}
+                        {h.column.columnDef.meta?.filter && (
+                          <ColumnFilter
+                            label={String(h.column.columnDef.header)}
+                            values={[...h.column.getFacetedUniqueValues().keys()].map(String)}
+                            selected={h.column.getFilterValue() as string[] | undefined}
+                            onChange={(v) => h.column.setFilterValue(v)}
+                          />
+                        )}
+                      </>
+                    )}
+                  </th>
+                ))}
+              </tr>
+            ))}
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className={selected.has(r.id) ? 'sel' : ''}>
-                <td>
-                  <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} aria-label={`เลือก ${r.so}`} />
-                </td>
-                {av.so && (
-                  <td className="nw so">
-                    {r.so}
-                    {r.editedAt && (
-                      <span className="edited" title="แก้ไขในแอป (import ครั้งถัดไปจะไม่ทับ)">
-                        {' '}
-                        ✎
-                      </span>
-                    )}
+            {table.getRowModel().rows.map((row) => (
+              <tr key={row.id} className={selected.has(row.id) ? 'sel' : ''}>
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id} className={cell.column.columnDef.meta?.td}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
-                )}
-                {av.customer && <td className="cust">{r.customerName || r.customerCode}</td>}
-                {av.item && (
-                  <td title={r.description}>
-                    <div className="clip">{r.description}</div>
-                    <div className="muted small">{r.itemNo}</div>
-                  </td>
-                )}
-                {av.qty && (
-                  <td className="num">
-                    {fmtQty(r.qty)} {r.unit}
-                  </td>
-                )}
-                {av.site && <td className="nw">{r.site}</td>}
-                {av.driver && <td className="nw">{r.driver}</td>}
-                {av.truck && <td className="nw">{[r.truckNo, r.plate].filter(Boolean).join(' / ')}</td>}
-                {av.status && <td className="nw">{r.status}</td>}
-                {av.remark && <td>{r.remark}</td>}
+                ))}
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={10} className="muted">
+                <td colSpan={table.getVisibleLeafColumns().length} className="muted">
                   ไม่พบรายการ
                 </td>
               </tr>

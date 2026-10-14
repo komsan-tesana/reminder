@@ -4,7 +4,8 @@ import DetailPanel from './components/DetailPanel'
 import FilterBar from './components/FilterBar'
 import BottomSheet from './components/BottomSheet'
 import ResizeHandle, { EDGE_W, MAX_VH, type PanelSize } from './components/ResizeHandle'
-import Toasts, { type Toast } from './components/Toasts'
+import { toast } from 'sonner'
+import Toasts from './components/Toasts'
 import type { ReminderDraft } from './components/ReminderModal'
 import { db, deleteShipments, editShipments, loadPanelSize, loadSettings, restoreBackup, savePanelSize, saveSettings, type Settings } from './lib/db'
 import { availableFields, effectiveGroupBy, groupOptions } from './lib/available'
@@ -26,11 +27,12 @@ import type { Filters, NotifySettings, Reminder, Shipment } from './types'
 const ImportWizard = lazy(() => import('./components/ImportWizard'))
 const DataModal = lazy(() => import('./components/DataModal'))
 const ReminderModal = lazy(() => import('./components/ReminderModal'))
+const NotifyModal = lazy(() => import('./components/NotifyModal'))
 const EditModal = lazy(() => import('./components/EditModal'))
 const SettingsModal = lazy(() => import('./components/SettingsModal'))
 
 type Selection = { date: string; key: string | null }
-type Dialog = 'import' | 'data' | 'reminders' | 'settings' | null
+type Dialog = 'import' | 'data' | 'reminders' | 'notify' | 'settings' | null
 
 /** The data date closest to today, so the calendar opens where the action is (not the file's last row). */
 function nearestDate(items: Shipment[]): string | null {
@@ -59,7 +61,6 @@ function useMedia(query: string): boolean {
   return match
 }
 
-let toastSeq = 0
 
 const GROUP_LABEL = { customer: 'ลูกค้า', so: 'Sales Order', truck: 'รถ' } as const
 
@@ -74,7 +75,6 @@ export default function App() {
   const [editing, setEditing] = useState<Shipment[] | null>(null)
   const [draft, setDraft] = useState<ReminderDraft | null>(null)
   const [focusDate, setFocusDate] = useState<string | null>(null)
-  const [toasts, setToasts] = useState<Toast[]>([])
   const [bannerOff, setBannerOff] = useState(false)
   const [panelSize, setPanelSize] = useState<PanelSize>(loadPanelSize)
   const stacked = useMedia('(max-width: 820px)')
@@ -89,8 +89,7 @@ export default function App() {
     })
   }, [])
 
-  const push = useCallback((m: { title: string; body: string }) => setToasts((t) => [...t, { id: ++toastSeq, ...m }]), [])
-  const dismiss = (id: number) => setToasts((t) => t.filter((x) => x.id !== id))
+  const push = useCallback((m: { title: string; body: string }) => void toast(m.title, { description: m.body }), [])
 
   const markFired = useCallback(async (ids: string[]) => {
     const now = Date.now()
@@ -340,6 +339,15 @@ export default function App() {
     setReminders(all)
     await releasePushIfIdle(all)
   }
+  /** remove every reminder that has already fired */
+  const clearFired = async () => {
+    const ids = (await db.reminders.toArray()).filter((r) => r.firedAt).map((r) => r.id)
+    if (!ids.length) return
+    await db.reminders.bulkDelete(ids)
+    const all = await db.reminders.toArray()
+    setReminders(all)
+    await releasePushIfIdle(all)
+  }
 
   async function testNotify() {
     const d = dailyDigest(shipments, new Date(), settings.notify)
@@ -399,8 +407,9 @@ export default function App() {
         <button onClick={() => setDialog('settings')} aria-label="ตั้งค่าการแสดงผล" title="ตั้งค่าการแสดงผล">
           ⚙
         </button>
+        <button onClick={() => setDialog('notify')}>🔔 การแจ้งเตือน</button>
         <button onClick={() => { setDraft(null); setDialog('reminders') }}>
-          🔔 เตือน{dueCount > 0 && <span className="badge">{dueCount}</span>}
+          ⏰ เตือนรายการ{dueCount > 0 && <span className="badge">{dueCount}</span>}
         </button>
       </header>
 
@@ -533,7 +542,7 @@ export default function App() {
         )}
       </main>
 
-      <Toasts toasts={toasts} onDismiss={dismiss} />
+      <Toasts />
 
       <Suspense fallback={null}>
         {dialog === 'import' && <ImportWizard onClose={() => setDialog(null)} onImported={afterImport} />}
@@ -554,10 +563,19 @@ export default function App() {
             notify={settings.notify}
             reminders={reminders}
             draft={draft}
-            onNotify={updateNotify}
             onAdd={addReminder}
             onToggle={toggleReminder}
             onDelete={deleteReminder}
+            onClearFired={clearFired}
+            push={{ state: pushSt, status: pushMsg, busy: pushBusy }}
+            onClose={() => setDialog(null)}
+          />
+        )}
+        {dialog === 'notify' && (
+          <NotifyModal
+            notify={settings.notify}
+            reminders={reminders}
+            onNotify={updateNotify}
             onTest={testNotify}
             push={{ state: pushSt, status: pushMsg, busy: pushBusy }}
             onDigestToggle={toggleDigest}
