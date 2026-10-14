@@ -2,13 +2,18 @@
 // shows notifications, and keeps a copy of visited files so it opens offline.
 // Network-first, so a new deploy is always picked up when online.
 const CACHE = 'transport-calendar-v1'
+// A virtual https file: the page stores the generated calendar here and then navigates to
+// ./calendar.ics. iOS Safari only opens Calendar's "Add All" sheet for a real http(s) response of
+// type text/calendar (data: and blob: links do not work), and a static host cannot produce one.
+const ICS_CACHE = 'transport-calendar-ics'
+const ICS_FILE = 'calendar.ics'
 
 self.addEventListener('install', () => self.skipWaiting())
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
-      for (const key of await caches.keys()) if (key !== CACHE) await caches.delete(key)
+      for (const key of await caches.keys()) if (key !== CACHE && key !== ICS_CACHE) await caches.delete(key)
       await self.clients.claim()
     })(),
   )
@@ -16,7 +21,18 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const req = event.request
-  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return
+  const url = new URL(req.url)
+  if (req.method !== 'GET' || url.origin !== self.location.origin) return
+  if (url.pathname.endsWith('/' + ICS_FILE)) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(ICS_CACHE)
+        // ?v=<time> is only a cache-buster for the browser, so ignore it when looking up
+        return (await cache.match(req, { ignoreSearch: true })) || new Response('ไม่พบไฟล์ปฏิทิน กรุณากดซิงก์ใหม่', { status: 404 })
+      })(),
+    )
+    return
+  }
   event.respondWith(
     (async () => {
       try {
