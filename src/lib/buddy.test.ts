@@ -130,7 +130,7 @@ describe('buddy: sprites', () => {
     }
   })
 
-  const OUTFITS: Outfit[] = ['scarf', 'cap', 'hardhat', 'glasses', 'crown', 'party', 'songkran', 'krathong', 'vest', 'nightcap', 'tie', 'medal', 'ninja', 'halloween', 'christmas', 'bell', 'bowtie']
+  const OUTFITS: Outfit[] = ['scarf', 'cap', 'hardhat', 'glasses', 'crown', 'party', 'songkran', 'krathong', 'vest', 'nightcap', 'tie', 'medal', 'ninja', 'halloween', 'christmas', 'bell', 'bowtie', 'headphones', 'starclip', 'eartag', 'earplaster', 'earflower', 'earmuffs', 'hairclip', 'hoop', 'earribbon', 'earcuff']
   it('every outfit changes every pose and keeps the outline inside the grid', () => {
     for (const p of POSES)
       for (const o of OUTFITS) {

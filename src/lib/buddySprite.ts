@@ -4,7 +4,7 @@
 export type Pose = 'sit' | 'blink' | 'walkA' | 'walkB' | 'sleep' | 'yawn' | 'happy' | 'playA' | 'playB' | 'stretch' | 'roll' | 'tailA' | 'tailB' | 'shout' | 'groomA' | 'groomB' | 'zoomA' | 'zoomB' | 'stand'
 
 /** what the cat wears; drawn on top of the fur before the outline is traced */
-export type Outfit = 'none' | 'scarf' | 'cap' | 'hardhat' | 'glasses' | 'crown' | 'party' | 'songkran' | 'krathong' | 'vest' | 'nightcap' | 'tie' | 'medal' | 'ninja' | 'halloween' | 'christmas' | 'bell' | 'bowtie'
+export type Outfit = 'none' | 'scarf' | 'cap' | 'hardhat' | 'glasses' | 'crown' | 'party' | 'songkran' | 'krathong' | 'vest' | 'nightcap' | 'tie' | 'medal' | 'ninja' | 'halloween' | 'christmas' | 'bell' | 'bowtie' | 'headphones' | 'starclip' | 'eartag' | 'earplaster' | 'earflower' | 'earmuffs' | 'hairclip' | 'hoop' | 'earribbon' | 'earcuff'
 /** what the cat carries in its mouth (a separate slot from the outfit); `notoy` = nothing */
 export type Toy = 'notoy' | 'mackerel' | 'mouse' | 'pompom' | 'feather' | 'can' | 'key' | 'receipt' | 'yarn' | 'fishbone' | 'magnifier' | 'catnip' | 'treat' | 'pencil'
 /** fur colours */
@@ -35,6 +35,7 @@ export const PALETTE: Record<string, string> = {
   I: '#2f4b8f', // tie
   H: '#22314f', // ninja headband
   X: '#3a2a52', // witch hat
+  G: '#e8c79a', // plaster
 }
 
 /** colour overrides per skin (fur W/S, patch B, eyes E) */
@@ -342,6 +343,18 @@ type Paint = [number, number, number, number, string] | [number, number, string]
 /** outfit pieces per layout, as rectangles [x, y, w, h, colour] or single pixels [x, y, colour] */
 /** `stand` is optional: head gear sits on the standing cat exactly as on the sitting one, so it falls back to `front` */
 type Pieces = Record<Exclude<Kind, 'stand'>, Paint[]> & { stand?: Paint[] }
+type Box = [number, number, number, number] // x, y, w, h
+/** where the two ears are in each layout; ear gear is generated from these so every layout stays consistent */
+const EARS: Record<Exclude<Kind, 'stand'>, { L: Box; R: Box }> = {
+  front: { L: [4, 2, 3, 2], R: [15, 2, 3, 2] },
+  side: { L: [19, 2, 2, 3], R: [24, 2, 2, 3] },
+  loaf: { L: [18, 3, 2, 3], R: [23, 3, 2, 3] },
+  stretch: { L: [20, 8, 2, 3], R: [25, 8, 2, 3] },
+  roll: { L: [2, 6, 2, 3], R: [7, 6, 2, 3] },
+}
+type Ears = { L: Box; R: Box }
+const earGear = (f: (e: Ears) => Paint[]): Pieces => ({ front: f(EARS.front), side: f(EARS.side), loaf: f(EARS.loaf), stretch: f(EARS.stretch), roll: f(EARS.roll) })
+
 const OUTFITS: Record<Exclude<Outfit, 'none'>, Pieces> = {
   scarf: {
     front: [[5, 12, 12, 2, 'R'], [14, 14, 2, 3, 'R']],
@@ -463,6 +476,45 @@ const OUTFITS: Record<Exclude<Outfit, 'none'>, Pieces> = {
     roll: [[8, 8, 2, 6, 'R'], [8, 14, 2, 2, 'Y']],
     stand: [[6, 12, 10, 1, 'R'], [10, 13, 2, 2, 'Y'], [10, 13, 'W']],
   },
+  headphones: {
+    front: [[5, 3, 12, 1, 'K'], [4, 4, 1, 2, 'K'], [17, 4, 1, 2, 'K'], [2, 6, 3, 4, 'R'], [17, 6, 3, 4, 'R']],
+    side: [[21, 3, 3, 1, 'K'], [22, 4, 1, 2, 'K'], [21, 6, 3, 4, 'R']],
+    loaf: [[17, 5, 9, 1, 'K'], [16, 6, 2, 4, 'R'], [25, 6, 2, 4, 'R']],
+    stretch: [[19, 9, 8, 1, 'K'], [19, 10, 2, 4, 'R'], [25, 10, 2, 2, 'R']],
+    roll: [[1, 5, 9, 1, 'K'], [1, 6, 1, 4, 'K'], [9, 6, 1, 4, 'K'], [1, 9, 2, 3, 'R'], [8, 9, 2, 3, 'R']],
+  },
+  // a gold star clip on the right ear
+  starclip: earGear(({ R: [x, y, w, h] }) => [[x + w - 2, y + h - 2, 2, 2, 'Y'], [x + w - 1, y - 1, 'Y']]),
+  // a green tag with a silver clasp hanging from the right ear
+  eartag: earGear(({ R: [x, y, w, h] }) => [[x + w - 1, y + h - 1, 'Z'], [x + w - 2, y + h, 2, 2, 'A']]),
+  // a plaster across the right ear and onto the head
+  earplaster: earGear(({ R: [x, y, w, h] }) => [[x, y + h - 1, w, 2, 'G'], [x + Math.floor(w / 2), y, 1, h + 1, 'G']]),
+  // a pink flower tucked behind the left ear
+  earflower: earGear(({ L: [x, y, , h] }) => {
+    const cx = x + 1
+    const cy = y + h - 1
+    return [[cx - 1, cy, 3, 1, 'T'], [cx, cy - 1, 1, 3, 'T'], [cx, cy, 'Y']]
+  }),
+  // fluffy blue muffs over both ears joined by a silver band
+  earmuffs: earGear(({ L, R }) => [
+    [L[0], L[1] - 1, L[2], L[3] + 1, 'N'],
+    [R[0], R[1] - 1, R[2], R[3] + 1, 'N'],
+    [L[0] + L[2], L[1] - 1, R[0] - L[0] - L[2], 1, 'Z'],
+    [L[0], L[1] - 1, 'W'],
+    [R[0], R[1] - 1, 'W'],
+  ]),
+  // a violet barrette under the left ear
+  hairclip: earGear(({ L: [x, y, w, h] }) => [[x, y + h, w, 2, 'V'], [x, y + h, 'Y']]),
+  // a gold ring hanging off the left ear
+  hoop: earGear(({ L: [x, y, , h] }) => [[x - 1, y + h - 1, 3, 1, 'Y'], [x - 1, y + h, 1, 1, 'Y'], [x + 1, y + h, 1, 1, 'Y'], [x - 1, y + h + 1, 3, 1, 'Y']]),
+  // a pink bow on the left ear
+  earribbon: earGear(({ L: [x, y] }) => {
+    const cx = x + 1
+    const cy = y + 1
+    return [[cx - 2, cy - 1, 2, 3, 'T'], [cx + 1, cy - 1, 2, 3, 'T'], [cx, cy, 'Y']]
+  }),
+  // a silver cuff with blue stones on the right ear
+  earcuff: earGear(({ R: [x, y, w, h] }) => [[x + w - 2, y, 2, h, 'Z'], [x + w - 1, y, 'C'], [x + w - 1, y + h - 1, 'C']]),
   bowtie: {
     front: [[7, 12, 3, 3, 'I'], [12, 12, 3, 3, 'I'], [10, 13, 2, 1, 'D'], [8, 13, 'C'], [13, 13, 'C']],
     side: [[18, 9, 3, 4, 'I'], [19, 10, 1, 2, 'D'], [18, 9, 'C']],
