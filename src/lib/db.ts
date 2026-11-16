@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { Era, GroupBy, Mapping, NotifySettings, Reminder, Shipment, Theme } from '../types'
+import type { Era, GroupBy, Mapping, NotifySettings, PoRecord, Reminder, Shipment, Theme } from '../types'
 import { isTheme } from './theme'
 import { DEFAULT_TONES, migrateToneColor, type ToneSetting } from './tones'
 import type { Season } from './buddy'
@@ -16,11 +16,14 @@ class AppDB extends Dexie {
   reminders!: Table<Reminder, string>
   /** ids of rows the user deleted, so re-importing the same ERP file does not bring them back */
   deleted!: Table<{ id: string }, string>
+  /** imported purchase-order PDFs (Focus-PO); the file itself is kept so it can be opened beside the plan */
+  pos!: Table<PoRecord, string>
   constructor() {
     super('reminder')
     this.version(1).stores({ shipments: 'id,date,so,customerCode' })
     this.version(2).stores({ shipments: 'id,date,so,customerCode', reminders: 'id,at' })
     this.version(3).stores({ shipments: 'id,date,so,customerCode', reminders: 'id,at', deleted: 'id' })
+    this.version(4).stores({ shipments: 'id,date,so,customerCode', reminders: 'id,at', deleted: 'id', pos: 'id' })
   }
 }
 export const db = new AppDB()

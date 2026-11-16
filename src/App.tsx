@@ -4,7 +4,7 @@ import DetailPanel from './components/DetailPanel'
 import FilterBar from './components/FilterBar'
 import BottomSheet from './components/BottomSheet'
 import Select from './components/Select'
-import ResizeHandle, { EDGE_W, MAX_VH, type PanelSize } from './components/ResizeHandle'
+import ResizeHandle, { MAX_VH, type PanelSize } from './components/ResizeHandle'
 import { toast } from 'sonner'
 import Toasts from './components/Toasts'
 import Buddy from './components/Buddy'
@@ -27,7 +27,7 @@ import { buildPushPlan } from './lib/pushPlan'
 import { disablePush, enablePush, pushState, syncPush, testPush, type PushState } from './lib/push'
 import { countPendingReminders, pushAction, pushWanted, shouldAutoSubscribe } from './lib/pushStatus'
 import type { PushPlan } from './lib/pushPlan'
-import type { Filters, NotifySettings, Reminder, Shipment } from './types'
+import type { Filters, NotifySettings, PoRecord, Reminder, Shipment } from './types'
 
 // rarely used dialogs are loaded on demand to keep the first load small
 const ImportWizard = lazy(() => import('./components/ImportWizard'))
@@ -37,9 +37,10 @@ const NotifyModal = lazy(() => import('./components/NotifyModal'))
 const BuddyModal = lazy(() => import('./components/BuddyModal'))
 const EditModal = lazy(() => import('./components/EditModal'))
 const SettingsModal = lazy(() => import('./components/SettingsModal'))
+const PoModal = lazy(() => import('./components/PoModal'))
 
 type Selection = { date: string; key: string | null }
-type Dialog = 'import' | 'data' | 'reminders' | 'notify' | 'settings' | 'buddy' | null
+type Dialog = 'import' | 'data' | 'reminders' | 'notify' | 'settings' | 'buddy' | 'po' | null
 
 /** The data date closest to today, so the calendar opens where the action is (not the file's last row). */
 function nearestDate(items: Shipment[]): string | null {
@@ -74,6 +75,7 @@ const GROUP_LABEL = { customer: 'ลูกค้า', so: 'Sales Order', truck: 
 export default function App() {
   const [shipments, setShipments] = useState<Shipment[]>([])
   const [reminders, setReminders] = useState<Reminder[]>([])
+  const [pos, setPos] = useState<PoRecord[]>([])
   const [loaded, setLoaded] = useState(false)
   const [settings, setSettings] = useState<Settings>(loadSettings)
   const [filters, setFilters] = useState<Filters>(NO_FILTERS)
@@ -89,10 +91,13 @@ export default function App() {
   const statsRef = useRef(stats)
   const mainRef = useRef<HTMLElement>(null)
 
+  const reloadPos = useCallback(() => db.pos.toArray().then(setPos), [])
+
   useEffect(() => {
-    Promise.all([db.shipments.toArray(), db.reminders.toArray()]).then(([all, rem]) => {
+    Promise.all([db.shipments.toArray(), db.reminders.toArray(), db.pos.toArray()]).then(([all, rem, po]) => {
       setShipments(all)
       setReminders(rem)
+      setPos(po)
       setFocusDate(nearestDate(all))
       setLoaded(true)
     })
@@ -234,6 +239,7 @@ export default function App() {
     '--pending': display.tones.pending.color,
     '--unassigned': display.tones.unassigned.color,
   } as React.CSSProperties
+  const poNos = useMemo(() => pos.map((p) => p.poNo).filter(Boolean), [pos])
   const legend = (
     [
       { tone: 'assigned', label: 'จัดรถแล้ว' },
@@ -354,12 +360,14 @@ export default function App() {
 
   async function clearAll() {
     if (!confirm('ลบข้อมูลทั้งหมดในเบราว์เซอร์นี้? (ควรสำรองก่อน)')) return
-    await db.transaction('rw', db.shipments, db.reminders, async () => {
+    await db.transaction('rw', db.shipments, db.reminders, db.pos, async () => {
       await db.shipments.clear()
       await db.reminders.clear()
+      await db.pos.clear()
     })
     setShipments([])
     setReminders([])
+    setPos([])
     setSelection(null)
     setDialog(null)
   }
@@ -462,6 +470,7 @@ export default function App() {
         <button className="primary" onClick={() => setDialog('import')}>
           นำเข้า Excel
         </button>
+        <button onClick={() => setDialog('po')}>📋 Focus-PO</button>
         <button onClick={() => setDialog('data')}>ส่งออก / สำรอง</button>
         <button
           onClick={() => update({ theme: isDark ? 'light' : 'dark' })}
@@ -514,7 +523,6 @@ export default function App() {
           {
             // capped so a saved size never swallows a smaller window
             // same ceilings ResizeHandle enforces while dragging (see MAX_VH / EDGE in that file)
-            '--panel-w': panelSize.w ? `min(${panelSize.w}px, 100vw - ${EDGE_W}px)` : undefined,
             '--panel-h': panelSize.h ? `min(${panelSize.h}px, ${MAX_VH * 100}vh)` : undefined,
           } as React.CSSProperties
         }
@@ -539,6 +547,7 @@ export default function App() {
             groupBy={groupBy}
             toneVisible={toneVisible}
             focusDate={focusDate}
+            poNos={poNos}
             compact={stacked}
             onSelectGroup={pickGroup}
             onSelectDate={(date) => setSelection({ date, key: null })}
@@ -549,6 +558,7 @@ export default function App() {
                 <i className={`dot tone-${l.tone}`} /> {l.label}
               </span>
             ))}
+            {poNos.length > 0 && <span title="วันที่ plan มีเลข PO ตรงกับ PO ที่นำเข้าใน Focus-PO">📋 มี PO ตรงกับ plan</span>}
             <span className="spacer" />
             {range && (
               <span className="hide-narrow">
@@ -571,9 +581,9 @@ export default function App() {
         {selection && !stacked && (
           <ResizeHandle
             container={mainRef}
-            stacked={false}
-            onResize={(px) => resizePanel({ w: px })}
-            onReset={() => resizePanel({ w: null })}
+            stacked
+            onResize={(px) => resizePanel({ h: px })}
+            onReset={() => resizePanel({ h: null })}
           />
         )}
         {selection && !stacked && (
@@ -692,6 +702,16 @@ export default function App() {
             onChange={(d) => update({ display: d })}
             onClose={() => setDialog(null)}
           />}
+        {dialog === 'po' && (
+          <PoModal
+            items={pos}
+            onChanged={reloadPos}
+            shipments={shipments}
+            era={settings.era}
+            onJump={(date) => { setFocusDate(date); setSelection({ date, key: null }) }}
+            onClose={() => setDialog(null)}
+          />
+        )}
         {dialog === 'buddy' && (
           <BuddyModal stats={stats} buddy={settings.buddy} onBuddy={(buddy) => update({ buddy })} skin={look.skin} outfit={look.outfit} toy={look.toy} onEquip={(patch) => update({ buddy: { ...settings.buddy, ...patch } })} onClose={() => setDialog(null)} />
         )}

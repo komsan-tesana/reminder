@@ -8,6 +8,7 @@ const MIN_REST = 260 // room always left for the calendar
 const PAD = 12 // padding of <main>
 const HANDLE = 12
 const STEP = 24
+const MIN_CAL_H = 240 // room always left for the calendar when the panel sits below it
 /** viewport width kept for padding, handle and the calendar's minimum when the panel is widest */
 export const EDGE_W = 2 * PAD + HANDLE + MIN_REST
 /**
@@ -25,6 +26,9 @@ type Props = {
   onReset: () => void
 }
 
+/** tallest the bottom panel may be: a share of the viewport, and always leaving the calendar its minimum */
+const maxHeight = (rect: DOMRect) => Math.min(window.innerHeight * MAX_VH, rect.height - 2 * PAD - HANDLE - MIN_CAL_H)
+
 const clamp = (n: number, lo: number, hi: number) => Math.min(Math.max(n, lo), Math.max(lo, hi))
 
 /** Draggable splitter between the calendar and the detail panel. */
@@ -35,7 +39,7 @@ export default function ResizeHandle({ container, stacked, onResize, onReset }: 
     const rect = container.current?.getBoundingClientRect()
     if (!rect) return null
     return stacked
-      ? clamp(rect.bottom - PAD - clientY - HANDLE / 2, MIN_PANEL * 0.6, window.innerHeight * MAX_VH)
+      ? clamp(rect.bottom - PAD - clientY - HANDLE / 2, MIN_PANEL * 0.6, maxHeight(rect))
       : clamp(rect.right - PAD - clientX - HANDLE / 2, MIN_PANEL, Math.min(rect.width, window.innerWidth) - EDGE_W)
   }
 
@@ -63,7 +67,7 @@ export default function ResizeHandle({ container, stacked, onResize, onReset }: 
     if (e.key === grow || e.key === shrink) {
       e.preventDefault()
       const rect = container.current?.getBoundingClientRect()
-      const max = !rect ? current + STEP : stacked ? window.innerHeight * MAX_VH : Math.min(rect.width, window.innerWidth) - EDGE_W
+      const max = !rect ? current + STEP : stacked ? maxHeight(rect) : Math.min(rect.width, window.innerWidth) - EDGE_W
       onResize(clamp(current + (e.key === grow ? STEP : -STEP), stacked ? MIN_PANEL * 0.6 : MIN_PANEL, max))
     } else if (e.key === 'Home' || e.key === 'Enter') {
       e.preventDefault()
