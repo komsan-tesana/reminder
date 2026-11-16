@@ -468,9 +468,9 @@ export default function App() {
         <span className="muted">{shipments.length.toLocaleString()} รายการ</span>
         <div className="spacer" />
         <button className="primary" onClick={() => setDialog('import')}>
-          นำเข้า Excel
+          นำเข้า Plan
         </button>
-        <button onClick={() => setDialog('po')}>📋 Focus-PO</button>
+        <button onClick={() => setDialog('po')}>📋 นำเข้า PO</button>
         <button onClick={() => setDialog('data')}>ส่งออก / สำรอง</button>
         <button
           onClick={() => update({ theme: isDark ? 'light' : 'dark' })}
@@ -534,7 +534,7 @@ export default function App() {
               <span>นำเข้าไฟล์ Excel (.xlsx) หรือ CSV หัวคอลัมน์จะถูกจับคู่ให้อัตโนมัติ และแก้ได้ก่อนยืนยัน</span>
               <span className="row center">
                 <button className="primary" onClick={() => setDialog('import')}>
-                  นำเข้า Excel
+                  นำเข้า Plan
                 </button>
                 <button onClick={loadSample}>ลองด้วยข้อมูลตัวอย่าง</button>
               </span>
@@ -558,7 +558,7 @@ export default function App() {
                 <i className={`dot tone-${l.tone}`} /> {l.label}
               </span>
             ))}
-            {poNos.length > 0 && <span title="วันที่ plan มีเลข PO ตรงกับ PO ที่นำเข้าใน Focus-PO">📋 มี PO ตรงกับ plan</span>}
+            {poNos.length > 0 && <span title="วันที่ plan มีเลข PO ตรงกับ PO ที่นำเข้าในเมนูนำเข้า PO">📋 มี PO ตรงกับ plan</span>}
             <span className="spacer" />
             {range && (
               <span className="hide-narrow">
