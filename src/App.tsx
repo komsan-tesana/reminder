@@ -4,7 +4,7 @@ import DetailPanel from './components/DetailPanel'
 import FilterBar from './components/FilterBar'
 import BottomSheet from './components/BottomSheet'
 import Select from './components/Select'
-import ResizeHandle, { EDGE_W, MAX_VH, type PanelSize } from './components/ResizeHandle'
+import ResizeHandle, { MAX_VH, type PanelSize } from './components/ResizeHandle'
 import { toast } from 'sonner'
 import Toasts from './components/Toasts'
 import Buddy from './components/Buddy'
@@ -514,7 +514,6 @@ export default function App() {
           {
             // capped so a saved size never swallows a smaller window
             // same ceilings ResizeHandle enforces while dragging (see MAX_VH / EDGE in that file)
-            '--panel-w': panelSize.w ? `min(${panelSize.w}px, 100vw - ${EDGE_W}px)` : undefined,
             '--panel-h': panelSize.h ? `min(${panelSize.h}px, ${MAX_VH * 100}vh)` : undefined,
           } as React.CSSProperties
         }
@@ -571,9 +570,9 @@ export default function App() {
         {selection && !stacked && (
           <ResizeHandle
             container={mainRef}
-            stacked={false}
-            onResize={(px) => resizePanel({ w: px })}
-            onReset={() => resizePanel({ w: null })}
+            stacked
+            onResize={(px) => resizePanel({ h: px })}
+            onReset={() => resizePanel({ h: null })}
           />
         )}
         {selection && !stacked && (
