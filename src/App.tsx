@@ -20,6 +20,7 @@ import { isShown, markSeen, newlyUnlocked, petsLeftToday, recordData, recordEdit
 import { countAssigned, dataFacts, filterUseKind } from './lib/buddyData'
 import { fmtDate } from './lib/format'
 import { playChime } from './lib/sound'
+import { usePoImport } from './lib/usePoImport'
 import { applyTheme, THEME_LABEL } from './lib/theme'
 import { makeSample } from './lib/sample'
 import { systemNotify, useReminderEngine } from './lib/useReminderEngine'
@@ -92,6 +93,29 @@ export default function App() {
   const mainRef = useRef<HTMLElement>(null)
 
   const reloadPos = useCallback(() => db.pos.toArray().then(setPos), [])
+
+  // PO PDFs are read in the background (the state lives here, so closing the dialog does not stop it).
+  const shipmentsRef = useRef(shipments)
+  shipmentsRef.current = shipments
+  const dialogRef = useRef(dialog)
+  dialogRef.current = dialog
+  const poImport = usePoImport(
+    useCallback(() => shipmentsRef.current, []),
+    useCallback((read: number, failed: number) => {
+      if (read > 0) void playChime(0.3)
+      if (dialogRef.current === 'po') return // the dialog itself shows the result
+      if (read > 0) {
+        toast.success(`อ่าน PO เสร็จแล้ว ${read} ไฟล์${failed ? ` (อ่านไม่ได้ ${failed})` : ''}`, {
+          description: 'กดเพื่อตรวจเลข PO ก่อนบันทึก',
+          action: { label: 'ตรวจ', onClick: () => setDialog('po') },
+        })
+      } else if (failed > 0) {
+        toast.error(`อ่านไฟล์ PO ไม่ได้ ${failed} ไฟล์`, { action: { label: 'ดู', onClick: () => setDialog('po') } })
+      }
+    }, []),
+  )
+  const poReading = poImport.job.running
+  const poWaiting = !poReading && (poImport.job.drafts?.length ?? 0) > 0
 
   useEffect(() => {
     Promise.all([db.shipments.toArray(), db.reminders.toArray(), db.pos.toArray()]).then(([all, rem, po]) => {
@@ -467,10 +491,19 @@ export default function App() {
         </span>
         <span className="muted">{shipments.length.toLocaleString()} รายการ</span>
         <div className="spacer" />
-        <button className="primary" onClick={() => setDialog('import')}>
+        <button
+          className="primary"
+          disabled={poReading}
+          title={poReading ? 'กำลังอ่านไฟล์ PO อยู่ รอให้เสร็จก่อนจึงนำเข้า Plan ได้' : undefined}
+          onClick={() => setDialog('import')}
+        >
           นำเข้า Plan
         </button>
-        <button onClick={() => setDialog('po')}>📋 นำเข้า PO</button>
+        <button onClick={() => setDialog('po')} title={poReading ? 'กำลังอ่านไฟล์ PO อยู่เบื้องหลัง' : poWaiting ? 'มี PO ที่อ่านแล้วรอตรวจ' : undefined}>
+          📋 นำเข้า PO
+          {poReading && <span className="muted small"> · {Math.round(poImport.job.fraction * 100)}%</span>}
+          {poWaiting && <span className="badge">รอตรวจ</span>}
+        </button>
         <button onClick={() => setDialog('data')}>ส่งออก / สำรอง</button>
         <button
           onClick={() => update({ theme: isDark ? 'light' : 'dark' })}
@@ -533,7 +566,7 @@ export default function App() {
               <b>ยังไม่มีข้อมูล</b>
               <span>นำเข้าไฟล์ Excel (.xlsx) หรือ CSV หัวคอลัมน์จะถูกจับคู่ให้อัตโนมัติ และแก้ได้ก่อนยืนยัน</span>
               <span className="row center">
-                <button className="primary" onClick={() => setDialog('import')}>
+                <button className="primary" disabled={poReading} title={poReading ? 'กำลังอ่านไฟล์ PO อยู่ รอให้เสร็จก่อน' : undefined} onClick={() => setDialog('import')}>
                   นำเข้า Plan
                 </button>
                 <button onClick={loadSample}>ลองด้วยข้อมูลตัวอย่าง</button>
@@ -706,6 +739,9 @@ export default function App() {
           <PoModal
             items={pos}
             onChanged={reloadPos}
+            job={poImport.job}
+            onStart={(files) => void poImport.start(files)}
+            setDrafts={poImport.setDrafts}
             shipments={shipments}
             era={settings.era}
             onJump={(date) => { setFocusDate(date); setSelection({ date, key: null }) }}

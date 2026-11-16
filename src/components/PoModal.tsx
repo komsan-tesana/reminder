@@ -3,28 +3,18 @@ import Modal from './Modal'
 import { db } from '../lib/db'
 import { fmtDate, fmtQty } from '../lib/format'
 import { matchPo, PO_STATUS_LABEL, rowsForPo, type PoStatus } from '../lib/poMatch'
-import { planRefsOf, poKey, readPo } from '../lib/poRead'
+import { poKey } from '../lib/poRead'
+import type { PoJob } from '../lib/usePoImport'
 import type { Era, PoRecord, Shipment } from '../types'
-
-type Draft = {
-  key: string
-  file: File
-  text: string
-  ocr: boolean
-  poNo: string
-  candidates: string[]
-  planHit: boolean
-  issuer: string
-  poDate: string
-  dates: string[]
-  total: number | null
-  currency: string
-}
 
 type Props = {
   /** imported POs and a way to re-read them after a change; App owns them so the calendar can mark matching days */
   items: PoRecord[]
   onChanged: () => void
+  /** the background read (App owns it, so it keeps running when this dialog is closed) */
+  job: PoJob
+  onStart: (files: File[]) => void
+  setDrafts: (d: PoJob['drafts']) => void
   shipments: Shipment[]
   era: Era
   /** jump the calendar to a plan date */
@@ -32,14 +22,13 @@ type Props = {
   onClose: () => void
 }
 
-const fileId = (f: File) => `${f.name.toLowerCase()}|${f.size}`
 const TONE: Record<PoStatus, string> = { planned: 'text-[var(--assigned)]', check: 'text-[var(--warn)]', unplanned: 'text-[var(--pending)]', nokey: 'text-muted' }
 const ORDER: PoStatus[] = ['planned', 'check', 'unplanned', 'nokey']
 
-export default function PoModal({ items, onChanged, shipments, era, onJump, onClose }: Props) {
-  const [drafts, setDrafts] = useState<Draft[] | null>(null)
-  const [busy, setBusy] = useState('')
-  const [error, setError] = useState('')
+export default function PoModal({ items, onChanged, job, onStart, setDrafts, shipments, era, onJump, onClose }: Props) {
+  const { drafts } = job
+  const busy = job.running
+  const [notPdf, setNotPdf] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [filter, setFilter] = useState<PoStatus | null>(null)
   const input = useRef<HTMLInputElement>(null)
@@ -59,31 +48,11 @@ export default function PoModal({ items, onChanged, shipments, era, onJump, onCl
   const shown = filter ? rows.filter((r) => r.m.status === filter) : rows
   const current = rows.find((r) => r.po.id === selected) ?? null
 
-  async function pick(list: FileList | File[] | null) {
+  function pick(list: FileList | File[] | null) {
     const files = [...(list ?? [])].filter((f) => /\.pdf$/i.test(f.name) || f.type === 'application/pdf')
-    if (!files.length) {
-      if (list?.length) setError('รองรับเฉพาะไฟล์ PDF')
-      return
-    }
-    setError('')
-    const refs = planRefsOf(shipments)
-    const out: Draft[] = []
-    try {
-      const { readPdfText } = await import('../lib/poPdf')
-      for (const [i, file] of files.entries()) {
-        setBusy(`กำลังอ่าน ${file.name} (${i + 1}/${files.length})…`)
-        try {
-          const { text, ocr } = await readPdfText(file, (m) => setBusy(`${file.name}: ${m}`))
-          out.push({ key: fileId(file), file, text, ocr, ...readPo(file.name, text, refs) })
-        } catch (e) {
-          setError(`อ่าน ${file.name} ไม่ได้: ${e instanceof Error ? e.message : String(e)}`)
-        }
-      }
-    } finally {
-      setBusy('')
-      if (input.current) input.current.value = ''
-    }
-    if (out.length) setDrafts(out)
+    setNotPdf(!files.length && !!list?.length)
+    if (files.length) onStart(files)
+    if (input.current) input.current.value = ''
   }
 
   async function saveDrafts() {
@@ -133,11 +102,11 @@ export default function PoModal({ items, onChanged, shipments, era, onJump, onCl
     return (
       <Modal
         title={`ตรวจเลข PO ก่อนบันทึก (${drafts.length} ไฟล์)`}
-        onClose={() => setDrafts(null)}
+        onClose={onClose}
         wide
         footer={
           <>
-            <button onClick={() => setDrafts(null)}>ยกเลิก</button>
+            <button onClick={() => setDrafts(null)} title="ทิ้งรายการที่อ่านแล้วนี้">ยกเลิก</button>
             <button className="primary" onClick={saveDrafts}>
               บันทึก
             </button>
@@ -145,8 +114,9 @@ export default function PoModal({ items, onChanged, shipments, era, onJump, onCl
         }
       >
         <p className="muted small">
-          เลข PO คือสิ่งที่ใช้จับคู่กับช่อง Customer reference ใน plan ตรวจให้ถูกต้อง หรือกดเลือกจากตัวเลือกที่ระบบเจอ
+          เลข PO คือสิ่งที่ใช้จับคู่กับช่อง Customer reference ใน plan ตรวจให้ถูกต้อง หรือกดเลือกจากตัวเลือกที่ระบบเจอ · ปิดหน้านี้ไว้ก่อนได้ รายการที่อ่านแล้วจะรอตรวจอยู่ที่ปุ่ม "นำเข้า PO"
         </p>
+        {job.running && <p className="muted small">กำลังอ่านไฟล์อื่นต่อ… {Math.round(job.fraction * 100)}%</p>}
         <div className="flex flex-col gap-3">
           {drafts.map((d, i) => {
             const n = rowsForPo(d.poNo, shipments).length
@@ -201,11 +171,29 @@ export default function PoModal({ items, onChanged, shipments, era, onJump, onCl
         onDrop={(e) => {
           e.preventDefault()
           setOver(false)
-          if (!busy) void pick(e.dataTransfer.files)
+          if (!busy) pick(e.dataTransfer.files)
         }}
       >
-        {busy || 'ลากไฟล์ PDF ของ PO มาวางที่นี่ (หลายไฟล์ได้) หรือคลิกเพื่อเลือกไฟล์'}
-        {error && <div className="warn small mt-1">{error}</div>}
+        {busy ? (
+          <div role="status" aria-live="polite" className="mx-auto flex max-w-xl flex-col gap-2">
+            <div className="flex items-center justify-between gap-3 text-ink">
+              <span className="truncate">{job.label || 'กำลังอ่านไฟล์…'}</span>
+              <b>{Math.round(job.fraction * 100)}%</b>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-line" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(job.fraction * 100)}>
+              <div className="h-full rounded-full bg-[var(--accent-fill)] transition-[width] duration-300" style={{ width: `${Math.round(job.fraction * 100)}%` }} />
+            </div>
+            <span className="muted small">อ่านอยู่เบื้องหลัง ปิดหน้านี้ไปใช้งานอย่างอื่นได้ จะมีเสียงแจ้งเมื่อเสร็จ</span>
+          </div>
+        ) : (
+          'ลากไฟล์ PDF ของ PO มาวางที่นี่ (หลายไฟล์ได้) หรือคลิกเพื่อเลือกไฟล์'
+        )}
+        {notPdf && <div className="warn small mt-1">รองรับเฉพาะไฟล์ PDF</div>}
+        {job.error && !busy && (
+          <div className="warn small mt-1 whitespace-pre-line" onClick={(e) => e.stopPropagation()}>
+            {job.error}
+          </div>
+        )}
       </div>
       <p className="muted small">
         เลข PO จาก PDF จะถูกจับคู่กับช่อง <b>Customer reference</b> ของ plan · ไฟล์อ่านในเครื่องนี้เท่านั้น ไม่ถูกส่งออกไปไหน
