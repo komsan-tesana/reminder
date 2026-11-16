@@ -43,6 +43,7 @@ export default function PoModal({ items, onChanged, shipments, era, onJump, onCl
   const [selected, setSelected] = useState<string | null>(null)
   const [filter, setFilter] = useState<PoStatus | null>(null)
   const input = useRef<HTMLInputElement>(null)
+  const [over, setOver] = useState(false)
 
   const reload = async () => onChanged()
 
@@ -58,14 +59,18 @@ export default function PoModal({ items, onChanged, shipments, era, onJump, onCl
   const shown = filter ? rows.filter((r) => r.m.status === filter) : rows
   const current = rows.find((r) => r.po.id === selected) ?? null
 
-  async function pick(files: FileList | null) {
-    if (!files?.length) return
+  async function pick(list: FileList | File[] | null) {
+    const files = [...(list ?? [])].filter((f) => /\.pdf$/i.test(f.name) || f.type === 'application/pdf')
+    if (!files.length) {
+      if (list?.length) setError('รองรับเฉพาะไฟล์ PDF')
+      return
+    }
     setError('')
     const refs = planRefsOf(shipments)
     const out: Draft[] = []
     try {
       const { readPdfText } = await import('../lib/poPdf')
-      for (const [i, file] of [...files].entries()) {
+      for (const [i, file] of files.entries()) {
         setBusy(`กำลังอ่าน ${file.name} (${i + 1}/${files.length})…`)
         try {
           const { text, ocr } = await readPdfText(file, (m) => setBusy(`${file.name}: ${m}`))
@@ -184,22 +189,30 @@ export default function PoModal({ items, onChanged, shipments, era, onJump, onCl
 
   // ---- step 1: list + detail ----
   return (
-    <Modal title="Focus-PO · เทียบ PO กับ plan" onClose={onClose} xl>
+    <Modal title="นำเข้า PO · เทียบกับ plan" onClose={onClose} xl>
       <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <input ref={input} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(e) => pick(e.target.files)} />
-        <button className="primary" disabled={!!busy} onClick={() => input.current?.click()}>
-          + นำเข้า PO (PDF)
-        </button>
-        {busy && <span className="muted small">{busy}</span>}
-        {error && <span className="warn small">{error}</span>}
+      <input ref={input} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(e) => pick(e.target.files)} />
+      <div
+        className="drop"
+        style={{ margin: 0, padding: items.length ? '14px 16px' : '48px 16px', borderColor: over ? 'var(--accent)' : undefined, cursor: busy ? 'progress' : undefined }}
+        onClick={() => !busy && input.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setOver(true) }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setOver(false)
+          if (!busy) void pick(e.dataTransfer.files)
+        }}
+      >
+        {busy || 'ลากไฟล์ PDF ของ PO มาวางที่นี่ (หลายไฟล์ได้) หรือคลิกเพื่อเลือกไฟล์'}
+        {error && <div className="warn small mt-1">{error}</div>}
       </div>
       <p className="muted small">
         เลข PO จาก PDF จะถูกจับคู่กับช่อง <b>Customer reference</b> ของ plan · ไฟล์อ่านในเครื่องนี้เท่านั้น ไม่ถูกส่งออกไปไหน
       </p>
 
       {items.length === 0 ? (
-        <div className="muted py-16 text-center">ยังไม่มี PO กด "นำเข้า PO" แล้วเลือกไฟล์ PDF ได้หลายไฟล์พร้อมกัน</div>
+        <div className="muted py-10 text-center">ยังไม่มี PO ที่นำเข้า</div>
       ) : (
         <>
           <div className="flex flex-wrap gap-2">
