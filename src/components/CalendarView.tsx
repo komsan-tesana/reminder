@@ -7,6 +7,7 @@ import thLocale from '@fullcalendar/core/locales/th'
 import dayjs from 'dayjs'
 import { buildGroups, type Group, type Tone } from '../lib/group'
 import { fmtDate, fmtQty, shortName } from '../lib/format'
+import { poMarks } from '../lib/poMatch'
 import type { Era, GroupBy, Shipment } from '../types'
 
 type Props = {
@@ -16,6 +17,8 @@ type Props = {
   /** tones whose colour is shown; hidden ones render as a neutral chip */
   toneVisible: Record<Tone, boolean>
   focusDate: string | null
+  /** numbers of imported POs (Focus-PO); days and chips whose plan rows carry one get a 📋 mark */
+  poNos: string[]
   /** phone layout: no chips, each day shows its row count and the day opens in the bottom sheet */
   compact: boolean
   onSelectGroup: (g: Group) => void
@@ -24,7 +27,7 @@ type Props = {
 
 type TitleArg = { date: { year: number; month: number; day: number } }
 
-export default function CalendarView({ shipments, era, groupBy, toneVisible, focusDate, compact, onSelectGroup, onSelectDate }: Props) {
+export default function CalendarView({ shipments, era, groupBy, toneVisible, focusDate, poNos, compact, onSelectGroup, onSelectDate }: Props) {
   const ref = useRef<FullCalendar>(null)
   const host = useRef<HTMLDivElement>(null)
   const [viewType, setViewType] = useState('dayGridMonth')
@@ -42,17 +45,21 @@ export default function CalendarView({ shipments, era, groupBy, toneVisible, foc
     }
     return m
   }, [groups])
+  const marks = useMemo(() => poMarks(poNos, shipments), [poNos, shipments])
   const events = useMemo(
     () =>
-      (monthCounts ? [] : groups).map((g) => ({
+      (monthCounts ? [] : groups).map((g) => {
+        const pos = [...new Set(g.rows.map((r) => marks.byRow.get(r.id)).filter((x): x is string => !!x))]
+        return {
         id: g.id,
-        title: `${groupBy === 'customer' ? shortName(g.label) : g.label} (${g.rows.length})`,
-        extendedProps: { full: `${g.label} · ${g.rows.length} รายการ` },
+        title: `${pos.length ? '📋 ' : ''}${groupBy === 'customer' ? shortName(g.label) : g.label} (${g.rows.length})`,
+        extendedProps: { full: `${g.label} · ${g.rows.length} รายการ${pos.length ? ` · PO ${pos.join(', ')}` : ''}` },
         start: g.date,
         allDay: true,
         classNames: [`tone-${toneVisible[g.tone] ? g.tone : 'none'}`],
-      })),
-    [groups, toneVisible, groupBy, monthCounts],
+        }
+      }),
+    [groups, toneVisible, groupBy, monthCounts, marks],
   )
 
   // The "+more" popover is positioned by FullCalendar from its cell and can run past the bottom of the
@@ -138,11 +145,18 @@ export default function CalendarView({ shipments, era, groupBy, toneVisible, foc
       events={events}
       dayMaxEvents={4}
       dayCellContent={
-        monthCounts
+        monthCounts || marks.byDate.size
           ? (arg) => {
-              const d = perDay.get(dayjs(arg.date).format('YYYY-MM-DD'))
+              const date = dayjs(arg.date).format('YYYY-MM-DD')
+              const d = monthCounts ? perDay.get(date) : undefined
+              const pos = marks.byDate.get(date)
               return (
                 <>
+                  {pos && (
+                    <span className="po-mark" title={`PO ที่ตรงกับ plan วันนี้: ${pos.join(', ')}`}>
+                      📋{monthCounts ? '' : ` ${pos.length > 1 ? pos.length : pos[0]}`}
+                    </span>
+                  )}
                   <span>{arg.dayNumberText}</span>
                   {d && <span className={`day-count tone-${toneVisible[d.tone] ? d.tone : 'none'}`}>{d.n}</span>}
                 </>

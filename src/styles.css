@@ -346,3 +346,10 @@ main.sheet-open { padding-bottom: calc(34dvh + env(safe-area-inset-bottom)); }
 @media (prefers-reduced-motion: reduce) {
   .buddy, .buddy * { animation: none !important; transition: none !important; }
 }
+
+/* Focus-PO: nowrap cells and hover in its tables (they live in a dialog, not in .panel) */
+.table-wrap td.nw, .table-wrap th.nw { white-space: nowrap; }
+.table-wrap tbody tr:hover td { background: color-mix(in srgb, var(--accent) 7%, var(--card)); }
+
+/* Focus-PO: marker on a calendar day whose plan rows match an imported PO */
+.po-mark { display: inline-block; max-width: 7.5em; margin-right: 4px; padding: 0 5px; overflow: hidden; border-radius: 999px; background: var(--accent-fill); color: #fff; font-size: 10.5px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }

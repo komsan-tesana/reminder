@@ -80,3 +80,25 @@ export type Reminder = {
 
 /** daysAhead: how many days after today the daily digest also lists (0 = today only) */
 export type NotifySettings = { enabled: boolean; time: string; today: boolean; daysAhead: number; sound: boolean }
+
+/** A purchase-order PDF the user imported. Its layout differs per customer, so only the PO number is
+ *  relied on (it is compared with the plan's Customer reference); the rest is best-effort. */
+export type PoRecord = {
+  id: string
+  fileName: string
+  /** the PO number the user confirmed; this is the match key */
+  poNo: string
+  /** other numbers that looked like a PO number, for one-click correction */
+  candidates: string[]
+  issuer: string
+  /** ISO, '' when not found */
+  poDate: string
+  /** every date found in the document (ISO, sorted) */
+  dates: string[]
+  total: number | null
+  currency: string
+  text: string
+  ocr: boolean
+  importedAt: number
+  file: Blob
+}
